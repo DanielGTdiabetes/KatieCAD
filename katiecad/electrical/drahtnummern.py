@@ -148,6 +148,43 @@ def draehte(netz):
     return [d for d in gruppen.values() if d.leitungen]
 
 
+def netz_nummern(netz, blaetter):
+    """Writes the number of the Drahtnummer labels into the net nodes of their
+    wire (Knoten.draht, Knoten.draht_daten = (colour, cross-section)), so that
+    reports find the wire number at every terminal side or pin.
+    A manual label wins over an automatic one. -> number of wires with a number."""
+    blaetter = [(b, el) for b, el in blaetter
+                if any(isinstance(e, Drahtnummer) for e in el)]
+    if not blaetter:
+        return 0
+    ds = draehte(netz)
+    zu_draht = {}
+    for d in ds:
+        for b, l in d.leitungen:
+            zu_draht[(b, id(l))] = d
+    for b, elemente in blaetter:
+        leitungen = [l for l in elemente if isinstance(l, Leitung)]
+        for lab in elemente:
+            if isinstance(lab, Drahtnummer) and lab.inhalt.strip():
+                l = leitung_unter(leitungen, lab.x, lab.y)
+                d = zu_draht.get((b, id(l))) if l is not None else None
+                if d is not None:
+                    d.labels.append((b, lab))
+    n = 0
+    for d in ds:
+        labs = [lab for _b, lab in d.labels]
+        if not labs:
+            continue
+        labs.sort(key=lambda lab: not lab.manuell)
+        farbe = next((lab.aderfarbe for lab in labs if lab.aderfarbe), "")
+        qs = next((lab.querschnitt for lab in labs if lab.querschnitt), "")
+        for k in d.knoten:
+            k.draht = labs[0].inhalt.strip()
+            k.draht_daten = (farbe, qs)
+        n += 1
+    return n
+
+
 # ------------------------------------------------------------------
 # Number sources
 # ------------------------------------------------------------------

@@ -34,7 +34,7 @@ ADER_TOL = 1.0          # mm: wire -> nearest core crossing of the cable
 
 class Knoten:
     __slots__ = ("blatt", "x", "y", "art", "bes", "kennz", "name", "seite",
-                 "kanten", "text", "qv_art", "partner")
+                 "kanten", "text", "qv_art", "partner", "draht", "draht_daten")
 
     def __init__(self, blatt, x, y, art, bes=None, kennz="", name="",
                  seite="", text="", qv_art=""):
@@ -47,6 +47,8 @@ class Knoten:
         self.text = text                # Cross-reference text
         self.qv_art = qv_art
         self.partner = []               # Cross-reference counterparts
+        self.draht = ""                 # Wire number (from a Drahtnummer label)
+        self.draht_daten = ("", "")     # (colour, cross-section) of that wire
 
 
 class Kante:
@@ -249,9 +251,13 @@ class Netz:
     def aufbauen(cls, blaetter):
         """blaetter: [(key, elements), ...]"""
         netz = cls()
+        blaetter = list(blaetter)
         for schluessel, elemente in blaetter:
             netz.blatt_hinzufuegen(schluessel, elemente)
         netz.abschliessen()
+        # wire numbers of the Drahtnummer labels -> nodes (import here: no cycle)
+        from katiecad.electrical.drahtnummern import netz_nummern
+        netz_nummern(netz, blaetter)
         return netz
 
     # ---- Queries ----------------------------------------------------

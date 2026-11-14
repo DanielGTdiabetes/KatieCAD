@@ -4225,10 +4225,13 @@ class Drahtnummer(Text):
 
     auto_text: text written by the automatic numbering. If ``inhalt`` differs
                from it (the user typed a number), the label counts as manual and
-               is never overwritten. Empty = placed by hand = manual."""
+               is never overwritten. Empty = placed by hand = manual.
+    aderfarbe / querschnitt: optional colour (e.g. "BK") and cross-section
+               (e.g. "1,5") of the wire, shown in the terminal diagram."""
 
     def __init__(self, x, y, inhalt="", hoehe=2.5, winkel=0.0,
-                 einfuegepunkt="unten_zentriert", auto_text="", **kw):
+                 einfuegepunkt="unten_zentriert", auto_text="", aderfarbe="",
+                 querschnitt="", **kw):
         kw.setdefault("layer", E_LINES)
         kw.setdefault("farbe", LEITUNG_FARBE)
         kw.setdefault("eig_farbe", True)
@@ -4236,6 +4239,15 @@ class Drahtnummer(Text):
                          einfuegepunkt=einfuegepunkt, **kw)
         self.typ = "drahtnummer"
         self.auto_text = str(auto_text or "")
+        self.aderfarbe = str(aderfarbe or "").strip()
+        self.querschnitt = str(querschnitt or "").strip()
+
+    def to_dict(self):
+        d = super().to_dict()
+        for k in ("aderfarbe", "querschnitt"):
+            if not d.get(k):
+                d.pop(k, None)          # files stay as before when not used
+        return d
 
     @property
     def manuell(self):
@@ -5125,14 +5137,18 @@ class Klemme(_FestMaske):
     KASTEN_H = 8.0
     KASTEN_NUM = 2.5
 
-    def __init__(self, x, y, werte=None, darstellung="kreis", **kw):
+    def __init__(self, x, y, werte=None, darstellung="kreis", trennplatte=False, **kw):
         super().__init__("klemme", x, y, werte, **kw)
         self.darstellung = darstellung if darstellung in self.DARSTELLUNGEN else "kreis"
+        # Partition plate AFTER this terminal (terminal strip graphic / mounting order)
+        self.trennplatte = bool(trennplatte)
 
     def to_dict(self):
         d = super().to_dict()
         if self.darstellung == "kreis":
             d.pop("darstellung", None)          # old files / circle: nothing to save
+        if not self.trennplatte:
+            d.pop("trennplatte", None)
         return d
 
     def _hoehe(self):
