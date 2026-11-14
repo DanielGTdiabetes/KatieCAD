@@ -19,8 +19,9 @@ Rules, the first that applies wins:
   3. PLC: the wire reaches a channel of a DI/DO/AI/AO module -> its address
      with the module type as prefix (pin "DI0.00" -> "DI0.00", pin "0.00" or
      Siemens style "I0.0" / "%IX0.0" on a DI module -> "DI0.00" / "DI0.0").
-  4. Potential (optional): the wire reaches an unpaired cross reference
-     (e.g. "L1", "24V") -> that text.
+  4. Potential (on by default): the wire reaches a potential arrow (cross
+     reference) -> its free text ("+24VDC", "+24VDC1", "L1" ...), also when the
+     arrow pair only continues the wire on another sheet.
   5. Format, default "{sheet}{n:02}" with the counter starting at 0: sheet 10
      gives 1000, 1001 ... (counted left to right, top to bottom). The counter
      start is a setting ("start"); "{sheet}.{n}" with start 1 gives 10.1, 10.2 ...
@@ -35,7 +36,7 @@ from collections import defaultdict
 
 from katiecad.model.core import Leitung, Drahtnummer, BlockReferenz
 
-STANDARD = {"format": "{sheet}{n:02}", "start": 0, "sps": True, "potenzial": False,
+STANDARD = {"format": "{sheet}{n:02}", "start": 0, "sps": True, "potenzial": True,
             "hoehe": 2.5, "je_ast": True}
 LAGE_TOL = 0.3          # mm: label insertion point -> wire
 ARTEN_SPS = ("DI", "DO", "AI", "AO")
@@ -262,10 +263,16 @@ def sps_adresse(draht):
 
 
 def potenzial(draht):
-    """Text of an unpaired cross reference (potential L1, 24V ...) or ''."""
-    texte = sorted({n.text for n in draht.knoten
-                    if n.art == "qv" and not n.partner and n.text})
-    return texte[0] if texte else ""
+    """Name of the potential arrow (cross reference) the wire reaches: '+24VDC',
+    '+24VDC1', 'L1', '0V' ... The text is free, so circuits of the same voltage can
+    be told apart. Unpaired arrows (a potential used in many places) come first,
+    then a pair outgoing/incoming that continues the wire on another sheet.
+    -> '' without arrow."""
+    frei = sorted({n.text for n in draht.knoten if n.art == "qv" and not n.partner and n.text})
+    if frei:
+        return frei[0]
+    paar = sorted({n.text for n in draht.knoten if n.art == "qv" and n.partner and n.text})
+    return paar[0] if paar else ""
 
 
 def _sortierschluessel(draht, blatt):

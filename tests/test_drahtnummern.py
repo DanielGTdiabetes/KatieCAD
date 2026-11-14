@@ -45,7 +45,7 @@ def labels(el):
     return [e for e in el if isinstance(e, core.Drahtnummer)]
 
 
-ALT = {"format": "{sheet}.{n}"}       # format of the first tests (counter from 1)
+ALT = {"format": "{sheet}.{n}", "potenzial": False}   # settings of the first tests
 
 
 def nummerieren(blaetter, **kw):
@@ -140,6 +140,23 @@ pl = core.Querverweis(0, -20, text="L1", art="abgehend", richtung=270)
 bp = [geraet(0, 0, "-F1"), pl, L(0, -5, *pl.basis_punkt())]
 nummerieren([(0, bp)], einstellung=DN.einstellungen({"drahtnummern": dict(ALT, potenzial=True)}))
 check([l.inhalt for l in labels(bp)] == ["L1"], "Potenzial-Regel")
+check(DN.STANDARD["potenzial"] is True, "Potenzial-Regel standardmäßig an")
+# free names tell circuits of the same voltage apart
+p1 = core.Querverweis(0, -20, text="+24VDC", art="abgehend", richtung=270)
+p2 = core.Querverweis(30, -20, text="+24VDC1", art="abgehend", richtung=270)
+bq = [geraet(0, 0, "-F1"), p1, L(0, -5, *p1.basis_punkt()),
+      geraet(30, 0, "-F2"), p2, L(30, -5, *p2.basis_punkt())]
+nummerieren([(0, bq)], einstellung=DN.einstellungen({}))
+check(sorted(l.inhalt for l in labels(bq)) == ["+24VDC", "+24VDC1"],
+      f"freie Potenzialnamen: {[l.inhalt for l in labels(bq)]}")
+# an arrow pair that continues the wire on the next sheet names it too
+qa2 = core.Querverweis(0, -20, text="+24VDC", art="abgehend", richtung=270)
+qe2 = core.Querverweis(0, 0, text="+24VDC", art="ankommend", richtung=270)
+ba2 = [geraet(0, 0, "-G1"), qa2, L(0, -5, *qa2.basis_punkt())]
+bb2 = [qe2, geraet(0, -30, "-K9"), L(*qe2.spitze_punkt(), 0, -25)]
+nummerieren([(0, ba2), (1, bb2)], einstellung=DN.einstellungen({}))
+check([l.inhalt for l in labels(ba2) + labels(bb2)] == ["+24VDC", "+24VDC"],
+      f"Querverweis-Paar benennt den Draht: {[l.inhalt for l in labels(ba2) + labels(bb2)]}")
 
 # ---- save / load
 d = lab_w12.to_dict()

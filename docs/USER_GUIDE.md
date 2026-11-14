@@ -355,8 +355,9 @@ A wire is everything that is electrically joined up to the next terminal or devi
 across junctions and cross references; a terminal starts a new wire. The number sits on the
 longest piece of the wire on each sheet (a text you can move along the wire, edit or delete).
 Rules: a number typed or changed by hand is kept; a wire at a PLC channel gets its address with
-the module type as prefix (`DI0.00`, `DO1.07`; `I0.0` becomes `DI0.0`); optionally a wire at a
-potential cross reference (`L1`, `24V`) gets its name; all others get the project format, default
+the module type as prefix (`DI0.00`, `DO1.07`; `I0.0` becomes `DI0.0`); a wire at a potential
+arrow (cross reference) gets its name - the text is free, so `+24VDC` and `+24VDC1` tell two
+circuits of the same voltage apart (switch off with *Potential* in the dialog); all others get the project format, default
 `{sheet}{n:02}` with the first number 0 (sheet 10: `1000`, `1001` ...); *First number per sheet*
 changes the start (`{sheet}.{n}` with 1 gives `10.1`, `10.2` ...). At a junction (T) every branch
 carries a label with the same number. If you drag a number off its wire it no longer counts for the

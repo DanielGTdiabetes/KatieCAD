@@ -1,6 +1,7 @@
 # Änderungen
 
 ## Unveröffentlicht
+- Änderung: **Potenzialnamen als Drahtnummer:** Ein Draht an einem Potenzialpfeil (Querverweis) trägt dessen frei wählbaren Namen (`+24VDC`, `+24VDC1`, `L1`, `0V` …), jetzt standardmäßig und auch dann, wenn ein Pfeilpaar den Draht nur auf einem anderen Blatt fortsetzt. Gespeicherte Projekteinstellungen bleiben unverändert
 - Neu: **Etiketten für Etikettendrucker (Weidmüller M-Print PRO)** (*Projekt > Etiketten für M-Print PRO exportieren…*): Listen Drähte (ein Etikett je Drahtende, auch an Abzweigungen; nur Drähte mit Nummer), Klemmen (je Klemmleiste in Montagereihenfolge, `-X1:1`, `-X1:2` …) und Geräte. Excel mit einem Blatt je Liste oder CSV mit einer Datei je Liste; ein Etikett je Zeile, Text in Spalte A, ohne verbundene Zellen, Kopfzeile wahlweise. Text je Liste mit Platzhaltern (`{nr}`, `{hier}`, `{ziel}`; `{leiste}`, `{num}`, `{ort}`; `{ind}`), maximale Zeichenzahl je Markierer: längere Texte werden nach dem Export gemeldet. Die CSV-Texte bleiben unverändert (für M-Print, nicht zum Öffnen in Excel). Einstellungen werden im Projekt gespeichert
 - Neu: **Drahtnummer in der Verbindungsliste** (Spalte *Draht*, entfällt ohne Drahtnummern)
 - Änderung: **Drahtnummern ohne Punkt:** Vorgabeformat jetzt `{sheet}{n:02}` mit Zähler ab 0, d. h. Blatt 10 beginnt mit 1000, 1001 … Neue Einstellung *Erste Nummer je Blatt*. Projekte mit gespeichertem Format zählen wie bisher ab 1

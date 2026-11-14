@@ -2836,7 +2836,7 @@ class DrahtnummernDialog(tk.Toplevel):
         self._sps = tk.BooleanVar(value=bool(vorgabe.get("sps", True)))
         ttk.Checkbutton(f, text=tr("dlg.draht.sps"), variable=self._sps).grid(
             row=5, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
-        self._pot = tk.BooleanVar(value=bool(vorgabe.get("potenzial", False)))
+        self._pot = tk.BooleanVar(value=bool(vorgabe.get("potenzial", True)))
         ttk.Checkbutton(f, text=tr("dlg.draht.potenzial"), variable=self._pot).grid(
             row=6, column=0, columnspan=2, sticky=tk.W)
         self._ast = tk.BooleanVar(value=bool(vorgabe.get("je_ast", True)))
