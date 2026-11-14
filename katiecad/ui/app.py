@@ -66,7 +66,7 @@ from katiecad.ui.sidebar import Seitenleiste
 from katiecad.ui.widgets import FlatButton, farb_swatch, Tooltip
 import katiecad.model.core as core
 from katiecad.model.core import (
-    FARBEN, FARBSCHEMEN, FARBSCHEMA, farbschema_anwenden, EINHEITEN, ZEICHNUNGSFORMATE, MASSSTAEBE, LINIENTYPEN,
+    FARBEN, FARBSCHEMEN, FARBSCHEMA, farbschema_anwenden, EINHEITEN, ZEICHNUNGSFORMATE, MASSSTAEBE, LINIENTYPEN, linientyp_text, linientyp_schluessel, linientypen_texte,
     schrift_fett, schrift_name, schrift_setzen, schriftarten_aktualisieren, SCHRIFTEN,
     RASTER_GROESSEN, BG_PRESETS, RASTER_PRESETS, farbe_mischen, SCHRIFTARTEN, LINIENSTAERKEN,
     GRIFF_RADIUS, MIN_VP_GROESSE, PASTE_OFFSET_MM,
@@ -1694,11 +1694,19 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self._layer_info_aktualisieren()
         ttk.Separator(tb2, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=8)
         ttk.Label(tb2, text=tr("tb.linientyp"), style="Title.TLabel").pack(side=tk.LEFT)
-        cb_lt = ttk.Combobox(tb2, textvariable=self.linientyp,
-                             values=list(LINIENTYPEN.keys()),
-                             width=18, state="readonly")
+        # shows the translated name; self.linientyp keeps the stored key
+        self._lt_anzeige = tk.StringVar(value=linientyp_text(self.linientyp.get()))
+        self.linientyp.trace_add("write", lambda *_: self._lt_anzeige.set(
+            linientyp_text(self.linientyp.get())))
+        cb_lt = ttk.Combobox(tb2, textvariable=self._lt_anzeige,
+                             values=linientypen_texte(),
+                             width=20, state="readonly")
         cb_lt.pack(side=tk.LEFT, padx=4)
-        cb_lt.bind("<<ComboboxSelected>>", self._stil_auf_auswahl)
+
+        def _lt_gewaehlt(event=None):
+            self.linientyp.set(linientyp_schluessel(self._lt_anzeige.get()))
+            self._stil_auf_auswahl(event)
+        cb_lt.bind("<<ComboboxSelected>>", _lt_gewaehlt)
         ttk.Label(tb2, text="  " + tr("tb.staerke"), style="Title.TLabel").pack(side=tk.LEFT)
         cb_ls = ttk.Combobox(tb2, textvariable=self.linienstaerke,
                              values=[tr("tb.von_layer")] + [str(s) for s in LINIENSTAERKEN],
@@ -8590,12 +8598,28 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self._eig_palette = EigenschaftenPalette(self.root, self)
         return "break"
 
+    def _mit_ganzem_draht(self, ziele):
+        """Selected wire pieces -> all pieces of their wires on this sheet (a
+        conductor gets one line type up to the next terminal or device pin)."""
+        leitungen = [e for e in ziele if isinstance(e, Leitung)]
+        if not leitungen or self._ist_layout():
+            return list(ziele)
+        try:
+            alle = DN.gleicher_draht(self.elemente, leitungen)
+        except Exception as ex:                  # never block a style change
+            print(f"[KatieCAD] Draht: {ex}")
+            return list(ziele)
+        ids = {id(e) for e in ziele}
+        return list(ziele) + [l for l in alle if id(l) not in ids]
+
     def eigenschaft_anwenden(self, feld, wert):
         from katiecad.model.eigenschaften import anwenden
         if not self.auswahl:
             return
         self._snapshot()
-        n = anwenden(self.auswahl, feld, wert)
+        ziele = (self._mit_ganzem_draht(self.auswahl)
+                 if feld in ("linientyp", "staerke", "farbe") else self.auswahl)
+        n = anwenden(ziele, feld, wert)
         self.redraw()
         pal = getattr(self, "_eig_palette", None)
         if pal is not None:
@@ -8610,13 +8634,17 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         if not ziele:
             return
         self._snapshot()
+        ziele = self._mit_ganzem_draht(ziele)
         st = self._staerke_neu()
         for el in ziele:
-            el.staerke = st
+            # wires keep their own width while the toolbar says "by layer"
+            if not (isinstance(el, Leitung) and st is None):
+                el.staerke = st
             el.linientyp = self.linientyp.get()
         self.redraw()
         st_txt = tr("tb.von_layer") if st is None else f"{st} mm"
-        self.status.set((tr("txt.0041", p0=st_txt, p1=self.linientyp.get(), p2=len(ziele))))
+        self.status.set((tr("txt.0041", p0=st_txt, p1=linientyp_text(self.linientyp.get()),
+                            p2=len(ziele))))
 
     def _op_start(self, typ):
         kind, vp = self._ctx()

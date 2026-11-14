@@ -21,6 +21,7 @@ from katiecad.common.i18n import tr, SPRACHE
 from katiecad.electrical import suchen as SU
 from katiecad.model.core import (
     FARBEN, ZEICHNUNGSFORMATE, LINIENTYPEN, LINIENSTAERKEN,
+    linientyp_text, linientyp_schluessel, linientypen_texte,
     SCHRIFTARTEN, MASSSTAEBE, BEM_RICHTUNGEN,
     schrift_fett, schrift_name, schrift_setzen,
     Layer, Text, Linie, Kreis, Bogen, Rechteck, Polylinie,
@@ -748,9 +749,9 @@ class PropertiesDialog(tk.Toplevel):
         row += 1
         ttk.Label(f, text=tr("dlg.prop.linientyp")).grid(row=row, column=0,
                                                          sticky=tk.W, pady=4)
-        self.linientyp_var = tk.StringVar(value=element.linientyp)
+        self.linientyp_var = tk.StringVar(value=linientyp_text(element.linientyp))
         ttk.Combobox(f, textvariable=self.linientyp_var,
-                     values=list(LINIENTYPEN.keys()),
+                     values=linientypen_texte(),
                      width=20, state="readonly").grid(row=row, column=1,
                                                        sticky=tk.W, pady=4)
         row += 1
@@ -1026,7 +1027,7 @@ class PropertiesDialog(tk.Toplevel):
         try:
             el.layer = self.layer_var.get()
             el.farbe = self.farbe_var.get()
-            el.linientyp = self.linientyp_var.get()
+            el.linientyp = linientyp_schluessel(self.linientyp_var.get())
             el.eig_farbe = bool(self.eig_farbe_var.get())
             try:
                 el.staerke = float(str(self.staerke_var.get()).replace(",", "."))
@@ -2426,7 +2427,7 @@ class EigenschaftenPalette(tk.Toplevel):
             v = tk.StringVar()
             self._vars[feld] = v
             vals = (lambda: list(app.layers.keys())) if feld == "layer" \
-                else (lambda: list(LINIENTYPEN.keys()))
+                else linientypen_texte
             cb = ttk.Combobox(f, textvariable=v, width=24, values=vals())
             cb.configure(postcommand=lambda c=cb, fn=vals: c.configure(values=fn()))
             cb.bind("<<ComboboxSelected>>", lambda e, k=feld: self._anwenden(k))
@@ -2524,6 +2525,8 @@ class EigenschaftenPalette(tk.Toplevel):
                 txt = tr("dlg.eig.vonlayer") if feld in ("farbe", "staerke") else ""
             elif feld == "endstueck":
                 txt = tr("dlg.eig.end." + str(val))
+            elif feld == "linientyp":
+                txt = linientyp_text(val)
             elif isinstance(val, float):
                 txt = ("%g" % val)
             else:
@@ -2550,6 +2553,8 @@ class EigenschaftenPalette(tk.Toplevel):
                 return
             if feld == "endstueck":
                 wert = "strich" if wert == tr("dlg.eig.end.strich") else "pfeil"
+            if feld == "linientyp":
+                wert = linientyp_schluessel(wert)
             if feld in ("hoehe", "winkel", "staerke", "pfeil"):
                 if feld == "staerke" and wert in ("", tr("dlg.eig.vonlayer")):
                     wert = None
