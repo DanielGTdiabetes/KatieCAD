@@ -185,6 +185,23 @@ def netz_nummern(netz, blaetter):
     return n
 
 
+def gleicher_draht(elemente, leitungen):
+    """All wire pieces of ONE sheet that belong to the same wires (up to the next
+    terminal or device pin) as `leitungen`, e.g. to give a whole conductor one
+    line type. -> [Leitung] (the given ones included)."""
+    from katiecad.reports.netz import Netz
+    ids = {id(l) for l in leitungen}
+    if not ids:
+        return []
+    out = []
+    for d in draehte(Netz.aufbauen([(0, elemente)])):
+        stuecke = [l for _b, l in d.leitungen]
+        if any(id(l) in ids for l in stuecke):
+            out.extend(stuecke)
+    gesehen = {id(l) for l in out}
+    return out + [l for l in leitungen if id(l) not in gesehen]
+
+
 # ------------------------------------------------------------------
 # Number sources
 # ------------------------------------------------------------------

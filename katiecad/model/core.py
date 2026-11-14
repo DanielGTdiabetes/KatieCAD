@@ -104,9 +104,40 @@ LINIENTYPEN = {
     "Volllinie (schmal)":       {"dash": None,           "farbe": "#ffffff"},
     "Strichlinie (verdeckt)":   {"dash": (6, 4),         "farbe": "#b886fb"},
     "Strichpunktlinie (Achse)": {"dash": (12, 4, 3, 4),  "farbe": "#ff2d95"},
+    "Strich-Zweipunktlinie":    {"dash": (12, 3, 2, 3, 2, 3), "farbe": "#ff2d95"},
+    "Punktlinie":               {"dash": (1, 3),         "farbe": "#b886fb"},
     "Freihandlinie":            {"dash": (2, 3),         "farbe": "#8b7ea8"},
     "Schraffur":                {"dash": (2, 2),         "farbe": "#8b7ea8"},
 }
+# The keys above are stored in the files; these i18n keys give the displayed names.
+LINIENTYP_TEXT = {
+    "Volllinie (breit)": "lt.voll_breit", "Volllinie (schmal)": "lt.voll_schmal",
+    "Strichlinie (verdeckt)": "lt.strich", "Strichpunktlinie (Achse)": "lt.strichpunkt",
+    "Strich-Zweipunktlinie": "lt.strich2punkt", "Punktlinie": "lt.punkt",
+    "Freihandlinie": "lt.freihand", "Schraffur": "lt.schraffur",
+}
+
+
+def linientyp_text(schluessel):
+    """Displayed name of a line type ('Volllinie (schmal)' -> 'Continua (fina)')."""
+    from katiecad.common.i18n import tr
+    t = LINIENTYP_TEXT.get(schluessel)
+    return tr(t) if t else str(schluessel or "")
+
+
+def linientyp_schluessel(text):
+    """Stored key of a displayed line type name (unknown texts stay as they are)."""
+    if text in LINIENTYPEN:
+        return text
+    for k in LINIENTYPEN:
+        if linientyp_text(k) == text:
+            return k
+    return text
+
+
+def linientypen_texte():
+    """Displayed names of all line types in the order of LINIENTYPEN."""
+    return [linientyp_text(k) for k in LINIENTYPEN]
 
 RASTER_GROESSEN = [1, 2, 5, 10, 20, 25, 50, 100]
 

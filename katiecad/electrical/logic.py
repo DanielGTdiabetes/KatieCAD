@@ -827,15 +827,44 @@ def leitungen_automatisch(elemente):
                 vorhanden[treffer] = l
         elif l.auto:
             weg.append(l)                        # no longer possible
+    # line type / width / colour set by the user survive when a piece is rebuilt
+    # (e.g. a device was moved): the new piece takes them from a removed piece
+    # that ended at the same point
+    stile = {}
+    for l in weg:
+        st = leitung_stil(l)
+        if st:
+            for p in ((l.x1, l.y1), (l.x2, l.y2)):
+                stile.setdefault(_pkt_key(*p), st)
     for l in weg:
         elemente.remove(l)
     neu = 0
     for k, (x1, y1, x2, y2, bes) in soll.items():
         if k in vorhanden:
             continue
-        elemente.append(Leitung(x1, y1, x2, y2, auto=True, layer=E_LINES))
+        l = Leitung(x1, y1, x2, y2, auto=True, layer=E_LINES)
+        st = stile.get(_pkt_key(x1, y1)) or stile.get(_pkt_key(x2, y2))
+        if st:
+            for attr, wert in st.items():
+                setattr(l, attr, wert)
+        elemente.append(l)
         neu += 1
     return neu, len(weg), weg
+
+
+def _pkt_key(x, y):
+    return (round(x, 2), round(y, 2))
+
+
+def leitung_stil(l):
+    """{attribute: value} of the style a wire piece got by hand (line type,
+    width, colour) - empty if it still has the defaults of a new wire."""
+    neu = Leitung(0, 0, 1, 0)
+    out = {}
+    for attr in ("linientyp", "staerke", "farbe", "eig_farbe"):
+        if getattr(l, attr, None) != getattr(neu, attr, None):
+            out[attr] = getattr(l, attr)
+    return out
 
 
 def kabel_kreuzungen(elemente):

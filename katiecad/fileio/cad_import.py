@@ -96,13 +96,14 @@ def _linientyp_name(name):
     n = (name or "").upper()
     if not n or n in ("CONTINUOUS", "BYLAYER", "BYBLOCK"):
         return "Volllinie (schmal)"
-    if any(k in n for k in ("CENTER", "PHANTOM", "DASHDOT", "DIVIDE",
-                            "ACAD_ISO04", "ACAD_ISO05", "ACAD_ISO10")):
+    if any(k in n for k in ("PHANTOM", "DIVIDE", "ACAD_ISO05", "ACAD_ISO12")):
+        return "Strich-Zweipunktlinie"
+    if any(k in n for k in ("CENTER", "DASHDOT", "ACAD_ISO04", "ACAD_ISO10")):
         return "Strichpunktlinie (Achse)"
     if any(k in n for k in ("DASH", "HIDDEN", "ACAD_ISO02", "ACAD_ISO03")):
         return "Strichlinie (verdeckt)"
-    if "DOT" in n:
-        return "Freihandlinie"
+    if "DOT" in n or "ACAD_ISO07" in n:
+        return "Punktlinie"
     return "Volllinie (schmal)"
 
 
