@@ -482,10 +482,22 @@ Press **F2**, double-click a sheet or right-click > *Sheet properties…* to set
 
 Dimensions: **Insert > Dimension > Radius dimension (DR)** and **Diameter dimension (DD)** - click a circle or arc, then the text position.
 
-## Terminal diagram: bridges
-Column order: terminal strip, location, type, **connection top, terminal (NUM), bridge, connection bottom**, sheet/column/row. Terminals of the same strip that you wire together on the top or bottom side count as a bridge: the *Bridge* column shows a line with dots at the connected terminals (overlapping bridges use separate lanes). The target then appears only on the first terminal of the bridge; the other cells stay empty. The column only appears if at least one bridge exists.
+## Terminal diagram: internal and external side
+Column order: terminal strip, location, manufacturer, type, **external: cable, conductor, wire, target**, terminal (NUM), bridge, **internal: target, wire, conductor, cable**, sheet/column/row, function. Columns without any value disappear.
 
-If a terminal sits on a potential rail (e.g. PE or N), "connection top/bottom" shows only the potential name. Requirement: the net contains a free connection point or cross reference named exactly like the terminal (NUM).
+- **Which side is external?** Set it in the documentation dialog under *Sides in the terminal diagram*: *Automatic* (default) takes the side reached through a cable as external (decided per terminal strip; without cables the top side is internal), or fixed *Top internal* / *Bottom internal*, or *Top / bottom (as before)*.
+- **Wire:** the number of the wire at that side (see *Wire numbers*).
+- **Cable:** `-W3 / 2` = cable and core the wire runs through.
+- **Conductor:** colour and cross-section, e.g. `BN 1,5 mm²`. The colour comes from the core name when it is a colour code (BK, BN, BU, GY, GNYE ...), the cross-section from the cable type (`4G1,5`, `3x2.5`). For single wires, double-click the wire number and enter *core colour* and *cross-section*.
+
+**Terminal strip drawing** (tick *Terminal strip drawing* in the documentation dialog): one sheet per strip to print and hang in the cabinet. The terminals stand side by side in mounting order; end brackets at both ends, an end cover after the last terminal and where the terminal type (TYP) changes, a partition plate where the terminal dialog has *Partition plate after this terminal* ticked. Bridges are bars with dots. Above each terminal the internal side, below it the external side: wire number, target, core and conductor, plus a bar with the cable name over the terminals of each cable.
+
+**Excel:** *Export lists as Excel file…* writes the terminal diagram as one sheet per terminal strip.
+
+## Terminal diagram: bridges
+Terminals of the same strip that you wire together on the top or bottom side count as a bridge: the *Bridge* column shows a line with dots at the connected terminals (overlapping bridges use separate lanes). The target then appears only on the first terminal of the bridge; the other cells stay empty. The column only appears if at least one bridge exists.
+
+If a terminal sits on a potential rail (e.g. PE or N), the target shows only the potential name. Requirement: the net contains a free connection point or cross reference named exactly like the terminal (NUM).
 
 In the terminal diagram every terminal strip (per location) starts on its own sheet; long strips continue on following sheets.
 The terminal diagram sheets are named after their terminal strip, e.g. "Klemmenplan X1" (with a location, placed first: "Klemmenplan +1 -X1"; several sheets for one strip: "... X1 2/3"). This also applies to the table of contents and the title block.

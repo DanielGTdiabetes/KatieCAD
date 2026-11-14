@@ -32,7 +32,7 @@ The **columns** of these tables can be changed without touching the program:
 |---|---|
 | `inhalt` (table of contents) | `nr`, `name`, `beschreibung`, `typ` |
 | `geraete` (device list) | `pos`, `ind`, `typ`, `per`, `anzahl`, `ort` (all locations) |
-| `klemmen` (terminal diagram) | `leiste`, `num`, `typ`, `per`, `oben`, `unten`, `ort` |
+| `klemmen` (terminal diagram) | `leiste`, `einbauort`, `num`, `hersteller`, `typ`, `per`, `ort`, `funktion`, `bruecke`; per side (`extern` / `intern`): `extern`, `extern_draht`, `extern_kabel`, `extern_leiter`, `extern_farbe`, `extern_querschnitt` (same with `intern_`); old `oben`, `unten` |
 | `kabel` (cable plan) | `cab`, `typ`, `ader`, `von`, `nach`, `ort` |
 
 `oben` / `unten` / `von` / `nach` list the targets as `Device:Pin` or
