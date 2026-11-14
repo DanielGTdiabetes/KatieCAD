@@ -657,6 +657,7 @@ BEFEHLE = {
     "MESS": "messen", "MESSEN": "messen", "DI": "messen", "DIST": "messen",
     "DISTANZ": "messen", "MEASURE": "messen",
     "NUMMERIEREN": "nummerieren", "AUTONUM": "nummerieren", "GERAETENUMMERN": "nummerieren",
+    "DRAHTNUMMERN": "drahtnummern", "WIRENUM": "drahtnummern", "NUMHILOS": "drahtnummern",
     "QSELECT": "schnellauswahl", "SCHNELLAUSWAHL": "schnellauswahl", "QS": "schnellauswahl",
     "VERSATZ": "versatz", "OFFSET": "versatz", "O": "versatz",
     "LAENGE": "laenge", "LÄNGE": "laenge", "LENGTHEN": "laenge", "LEN": "laenge",
@@ -4214,6 +4215,34 @@ class Leitung(Linie):
         super().__init__(x1, y1, x2, y2, **kw)
         self.typ = "leitung"
         self.auto = bool(auto)
+
+
+class Drahtnummer(Text):
+    """Wire number (connection definition point): a text whose insertion
+    point lies ON a wire. Every wire piece that is electrically the same
+    conductor (up to the next terminal or device pin) carries the same number;
+    see katiecad.electrical.drahtnummern.
+
+    auto_text: text written by the automatic numbering. If ``inhalt`` differs
+               from it (the user typed a number), the label counts as manual and
+               is never overwritten. Empty = placed by hand = manual."""
+
+    def __init__(self, x, y, inhalt="", hoehe=2.5, winkel=0.0,
+                 einfuegepunkt="unten_zentriert", auto_text="", **kw):
+        kw.setdefault("layer", E_LINES)
+        kw.setdefault("farbe", LEITUNG_FARBE)
+        kw.setdefault("eig_farbe", True)
+        super().__init__(x, y, inhalt, hoehe=hoehe, winkel=winkel,
+                         einfuegepunkt=einfuegepunkt, **kw)
+        self.typ = "drahtnummer"
+        self.auto_text = str(auto_text or "")
+
+    @property
+    def manuell(self):
+        return not self.auto_text or self.inhalt.strip() != self.auto_text
+
+    def griffe(self):
+        return [("p", self.x, self.y)]
 
 
 class Verbindungspunkt(AttributDefinition):

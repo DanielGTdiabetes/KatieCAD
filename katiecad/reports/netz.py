@@ -100,6 +100,7 @@ class Netz:
         self.klemmen = []        # {"obj", "blatt", "oben", "unten"}
         self.kabel = []          # {"obj", "blatt", "adern": [{"name","kanten"}]}
         self._leitung = {}       # id(wire) -> edge
+        self._leitungen = []     # [(sheet, wire, edge)]
 
     # ---- Construction ---------------------------------------------
     def _neu(self, blatt, x, y, art, **kw):
@@ -198,6 +199,7 @@ class Netz:
             k = _verbinden(a, b)
             if k is not None:
                 self._leitung[id(l)] = k
+                self._leitungen.append((blatt, l, k))
         self._kabel_adern(blatt, elemente)
 
     def _kabel_adern(self, blatt, elemente):
@@ -253,6 +255,10 @@ class Netz:
         return netz
 
     # ---- Queries ----------------------------------------------------
+    def leitung_kanten(self):
+        """[((sheet, wire), edge)] of all drawn wire pieces."""
+        return [((b, l), k) for b, l, k in self._leitungen]
+
     def ziele(self, start, ohne=()):
         """All end points reachable from `start`.
         -> [(node, cable_infos)], cable_infos = ((CAB, core), ...)

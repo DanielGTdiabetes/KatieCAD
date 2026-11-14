@@ -2725,6 +2725,72 @@ class ListenAuswahlDialog(tk.Toplevel):
         self.destroy()
 
 
+class DrahtnummernDialog(tk.Toplevel):
+    """Options of the wire numbering. vorgabe: settings dict (see
+    electrical.drahtnummern.STANDARD). mehrere_blaetter: offer "whole project".
+    result: {"format", "sps", "potenzial", "hoehe", "neu", "projekt"} or None."""
+
+    def __init__(self, parent, vorgabe, mehrere_blaetter=False):
+        super().__init__(parent)
+        self.result = None
+        self.title(tr("dlg.draht.titel"))
+        self.transient(parent)
+        _modal(self)
+        self.configure(bg=FARBEN["bg_mittel"])
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=tr("dlg.draht.titel"), style="Title.TLabel").grid(
+            row=0, column=0, columnspan=2, sticky=tk.W)
+        ttk.Label(f, text=tr("dlg.draht.format")).grid(row=1, column=0, sticky=tk.W, pady=(8, 0))
+        self._fmt = tk.StringVar(value=str(vorgabe.get("format") or "{sheet}.{n}"))
+        ttk.Entry(f, textvariable=self._fmt, width=22).grid(row=1, column=1, sticky=tk.W,
+                                                           padx=(6, 0), pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.draht.format_hilfe"), style="Hint.TLabel",
+                  wraplength=340, justify=tk.LEFT).grid(row=2, column=0, columnspan=2, sticky=tk.W)
+        ttk.Label(f, text=tr("dlg.draht.hoehe")).grid(row=3, column=0, sticky=tk.W, pady=(8, 0))
+        self._hoehe = tk.StringVar(value=str(vorgabe.get("hoehe", 2.5)))
+        ttk.Entry(f, textvariable=self._hoehe, width=8).grid(row=3, column=1, sticky=tk.W,
+                                                            padx=(6, 0), pady=(8, 0))
+        self._sps = tk.BooleanVar(value=bool(vorgabe.get("sps", True)))
+        ttk.Checkbutton(f, text=tr("dlg.draht.sps"), variable=self._sps).grid(
+            row=4, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+        self._pot = tk.BooleanVar(value=bool(vorgabe.get("potenzial", False)))
+        ttk.Checkbutton(f, text=tr("dlg.draht.potenzial"), variable=self._pot).grid(
+            row=5, column=0, columnspan=2, sticky=tk.W)
+        self._neu = tk.BooleanVar(value=False)
+        ttk.Radiobutton(f, text=tr("dlg.draht.nur_neue"), variable=self._neu,
+                        value=False).grid(row=6, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+        ttk.Radiobutton(f, text=tr("dlg.draht.alle_neu"), variable=self._neu,
+                        value=True).grid(row=7, column=0, columnspan=2, sticky=tk.W)
+        self._projekt = tk.BooleanVar(value=True)
+        if mehrere_blaetter:
+            ttk.Checkbutton(f, text=tr("dlg.draht.projekt"), variable=self._projekt).grid(
+                row=8, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.draht.hinweis"), style="Hint.TLabel", wraplength=340,
+                  justify=tk.LEFT).grid(row=9, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+        bf = ttk.Frame(f)
+        bf.grid(row=10, column=0, columnspan=2, pady=(12, 0))
+        ttk.Button(bf, text=tr("dlg.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
+        self.bind("<Return>", lambda e: self._ok())
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.wait_window(self)
+
+    def _ok(self):
+        try:
+            hoehe = float(self._hoehe.get().replace(",", "."))
+        except ValueError:
+            hoehe = 0.0
+        if hoehe <= 0:
+            messagebox.showerror(tr("dlg.draht.titel"), tr("dlg.draht.hoehe_fehler"), parent=self)
+            return
+        self.result = {"format": self._fmt.get().strip() or "{sheet}.{n}",
+                       "sps": self._sps.get(), "potenzial": self._pot.get(),
+                       "hoehe": hoehe, "neu": self._neu.get(),
+                       "projekt": self._projekt.get()}
+        self.destroy()
+
+
 class SchriftenDialog(tk.Toplevel):
     """Font manager: choose installed fonts that show up in the font lists.
     result: list of the chosen font names or None."""

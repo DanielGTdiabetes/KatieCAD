@@ -1,5 +1,8 @@
 # Changes
 
+## Unreleased
+- New: **Wire numbering** (menu *Project > Number wires...*, command `WIRENUM` / `NUMHILOS`): every wire (everything electrically joined up to the next terminal or device pin, also across junctions and cross references) gets one number, shown on the wire. Format per project, default `{sheet}.{n}` (sheet number + counter per sheet, left to right, top to bottom); `{sheetname}` and format specs like `{n:02}` work too. Wires at a PLC channel get its address with the module type as prefix (`DI0.00`, `DO1.07`, Siemens style `I0.0` becomes `DI0.0`); optionally wires at a potential (cross reference `L1`, `24V`) get its name. Numbers typed or changed by hand are never overwritten; "only wires without a number" or "renumber all"
+
 ## 1.1.7
 - New: **Spanish title blocks:** field names such as `DIBUJADO`, `REVISADO`, `NUMEROPLANO`, `PAGINA`, `FORMATO`, `TITULO1`-`3`, `ESTADO1`, `MODIFICACION1` (with `_NOMBRE`/`_FECHA`) are filled in automatically like the German and English names. New templates `title_block_A4_es`, `_A3_es` and `_A2-A0_es`
 - New: **Terminals as a rectangle:** the terminal dialog has an *Appearance* option: besides the **circle** there is now the **rectangle with number** (5 x 8 mm, NUM in the middle, connections at the top/bottom). Terminals placed side by side sit flush and form a terminal strip; both appearances can be mixed, old drawings stay unchanged

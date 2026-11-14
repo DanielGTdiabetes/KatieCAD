@@ -60,6 +60,7 @@ from katiecad.ui.toolbar_dock import ToolbarDockMixin
 from katiecad.model import geom2d as G2
 from katiecad.model import auswahl as AUSW
 from katiecad.electrical import nummerierung as NUM
+from katiecad.electrical import drahtnummern as DN
 from katiecad.model.geom2d import spline_punkte
 from katiecad.ui.sidebar import Seitenleiste
 from katiecad.ui.widgets import FlatButton, farb_swatch, Tooltip
@@ -76,7 +77,7 @@ from katiecad.model.core import (
     Ellipse, Spline, Wand, Kabelkanal, kanal_kette, kanal_versatz, KANAL_LAYER, KANAL_LAYER_FARBE, kanal_formstueck, kanal_aus_koerper, _variantenname, Oeffnung, Raum, RAUM_LAYER, RAUM_LAYER_FARBE, WAND_LAYER, WAND_LAYER_FARBE,
     wand_verknuepfen, wand_in_linien, wand_verbinden, wand_schliessen,
     Bemassung, Viewport, Schraffur, Bild, konturen_aus_elementen, bereich_an_punkt,
-    AttributDefinition, Leitung, Verbindungspunkt, Querverweis,
+    AttributDefinition, Leitung, Verbindungspunkt, Querverweis, Drahtnummer,
     Verbindung, ElektroMaske, Klemme, Kabel, Koordinatenfeld, ZUSAMMENGESETZT,
     Koerper3D, Gruppe3D, Skizze3D, Bemassung3D, Text3D,
     vp_tags_eindeutig, LEITUNG_FARBE, UI_SCHRIFT,
@@ -91,6 +92,7 @@ from katiecad.model.core import (
     teile_bogen_durch_winkel,
 )
 from katiecad.ui.dialogs import (
+    DrahtnummernDialog,
     farbe_waehlen, VON_LAYER,
     LICENSE_TEXT, zeige_lizenz_fenster,
     _LayoutNameDialog, BlattEigenschaftenDialog, PropertiesDialog, ViewportDialog,
@@ -391,6 +393,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self._vp_letzte_bez = ""
         self._vp_text_anzeigen = True
         self._qv_cache = {}
+        self._draht_einst = {}          # wire numbering settings without project
         self._ge_cache = {}
         self._vb_vorgabe = None
         self._vp_vorgabe = None
@@ -1183,6 +1186,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         m_projekt.add_separator()
         m_projekt.add_command(label=tr("menu.projekt.nummerieren"),
                               command=self.geraete_nummerieren)
+        m_projekt.add_command(label=tr("menu.projekt.drahtnummern"),
+                              command=self.drahtnummern_vergeben)
         m_projekt.add_command(label=tr("menu.projekt.bauteile"),
                               command=self.bauteilkatalog)
         m_projekt.add_command(label=tr("menu.projekt.doku"),
@@ -6764,6 +6769,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             if typ == "vpunkt":     return Verbindungspunkt(**d)
             if typ == "leitung":    return Leitung(**d)
             if typ == "querverweis": return Querverweis(**d)
+            if typ == "drahtnummer": return Drahtnummer(**d)
             if typ == "verbindung": return Verbindung(**d)
             if typ == "maske":      return ElektroMaske(**d)
             if typ == "klemme":     return Klemme(**d)
@@ -9176,6 +9182,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self.messen_start()
         elif cmd == "nummerieren":
             self.geraete_nummerieren()
+        elif cmd == "drahtnummern":
+            self.drahtnummern_vergeben()
         elif cmd == "schnellauswahl":
             self.schnellauswahl()
         elif cmd == "versatz":
@@ -11457,6 +11465,66 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self._ge_cache.clear()
         self.redraw()
         self.status.set(tr("txt.0052", p0=len(aend)))
+
+    def drahtnummern_vergeben(self):
+        """Wire numbering (see electrical.drahtnummern): one number per wire,
+        manual numbers are kept, PLC channels give their address."""
+        if self._ist_layout():
+            self.status.set(tr("txt.0126"))
+            return
+        p = self.projekt
+        mehrere = p is not None and len(p.zeichnungsblaetter()) > 1
+        vorgabe = DN.einstellungen(p.doku if p is not None else self._draht_einst)
+        dlg = DrahtnummernDialog(self.root, vorgabe, mehrere)
+        if dlg.result is None:
+            return
+        r = dlg.result
+        einst = {k: r[k] for k in DN.STANDARD}
+        if p is not None:
+            p.doku["drahtnummern"] = einst
+        else:
+            self._draht_einst = {"drahtnummern": einst}
+        self._einpolig_sync()
+        if p is not None and not self._blatt_sichern():
+            return
+        if p is not None and r["projekt"] and mehrere:
+            infos, indizes = self._zeichnungsblaetter_einlesen()
+            if infos is None:
+                return
+            blaetter = [(i, b.elemente) for i, b in zip(indizes, infos)]
+        else:
+            leitungen_automatisch(self.elemente)
+            blaetter = [(p.aktiv if p is not None else 0, self.elemente)]
+        netz = SEI.netz_aufbauen(blaetter)
+        plan = DN.planen(
+            blaetter, netz,
+            sheet_nr=lambda i: i + 1,
+            sheet_name=(lambda i: p.blaetter[i].name) if p is not None else None,
+            einstellung=einst, neu_nummerieren=r["neu"])
+        if plan.anzahl == 0:
+            self.status.set(tr("msg.draht.nichts", n=len(plan.draehte)))
+            return
+        self._snapshot()
+        aktiv = p.aktiv if p is not None else 0
+        andere = {i: (pfad, d) for i, pfad, d in self._andere_blaetter_daten()} if p else {}
+        fehler = []
+        for i, elemente in blaetter:
+            if not DN.anwenden(plan, i, elemente) or i == aktiv or i not in andere:
+                continue
+            pfad, d = andere[i]
+            d["elemente"] = ([e for e in d.get("elemente", [])
+                              if not (isinstance(e, dict) and e.get("typ") == "drahtnummer")]
+                             + [e.to_dict() for e in elemente if isinstance(e, Drahtnummer)])
+            try:
+                self._json_atomar_schreiben(pfad, d)
+            except OSError as ex:
+                fehler.append(str(ex))
+        if p is not None:
+            p.speichern()
+        if fehler:
+            messagebox.showerror(tr("dlg.draht.titel"), "\n".join(fehler), parent=self.root)
+        self.redraw()
+        self.status.set(tr("msg.draht.fertig", n=len(plan.draehte)))
 
     def bauteilkatalog(self):
         """Parts catalogue (manufacturer / order number per TYP) of the project."""

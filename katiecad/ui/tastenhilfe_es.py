@@ -103,6 +103,7 @@ BESCHREIBUNG = {
     "mirror": "Simetría",
     "move": "Mover",
     "nummerieren": "Numerar aparatos automáticamente",
+    "drahtnummern": "Numerar hilos",
     "ofang": "Referencia a objetos sí/no",
     "ortho": "Orto sí/no",
     "paste": "Pegar",

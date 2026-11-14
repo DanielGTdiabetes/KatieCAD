@@ -333,6 +333,17 @@ on the line with the number); then the field does not appear twice.
 
 ### Wires
 
+**Wire numbers:** *Project > Number wires...* (command `WIRENUM`) gives every wire one number.
+A wire is everything that is electrically joined up to the next terminal or device pin, also
+across junctions and cross references; a terminal starts a new wire. The number sits on the
+longest piece of the wire on each sheet (a text you can move along the wire, edit or delete).
+Rules: a number typed or changed by hand is kept; a wire at a PLC channel gets its address with
+the module type as prefix (`DI0.00`, `DO1.07`; `I0.0` becomes `DI0.0`); optionally a wire at a
+potential cross reference (`L1`, `24V`) gets its name; all others get the project format, default
+`{sheet}.{n}` (`3.1`, `3.2` ...). If you drag a number off its wire it no longer counts for the
+wire; automatic numbers without a wire are removed on the next run.
+
+
 - **Automatic:** if two connection points (pins, junctions, terminals, cross
   references) lie exactly above each other or side by side and their directions
   match, the red wire appears by itself. It disappears again if you remove one of

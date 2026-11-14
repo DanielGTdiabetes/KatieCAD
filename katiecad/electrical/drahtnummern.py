@@ -1,0 +1,318 @@
+# -*- coding: utf-8 -*-
+"""
+katiecad/electrical/drahtnummern.py - Wire numbering (BSD-3-Clause, NO Tkinter).
+
+A *wire* (Draht) is everything that is electrically the same conductor between
+two devices or terminals: all drawn wire pieces joined by junctions, corners,
+paired cross references and the same device pin. A terminal ends the wire
+(its top and bottom side are different conductors), so is the other pin of a
+device.
+
+Every wire gets ONE number. The number is stored in a ``Drahtnummer`` element
+whose insertion point lies on one of the wire pieces (like the connection
+definition point of other electrical CAD systems), so it survives when the
+automatic wires are rebuilt.
+
+Rules, the first that applies wins:
+  1. A manual number (typed or edited by the user) is kept.
+  2. Keep mode: a wire that already has an automatic number keeps it.
+  3. PLC: the wire reaches a channel of a DI/DO/AI/AO module -> its address
+     with the module type as prefix (pin "DI0.00" -> "DI0.00", pin "0.00" or
+     Siemens style "I0.0" / "%IX0.0" on a DI module -> "DI0.00" / "DI0.0").
+  4. Potential (optional): the wire reaches an unpaired cross reference
+     (e.g. "L1", "24V") -> that text.
+  5. Format, default "{sheet}.{n}": sheet number + counter per sheet,
+     counted left to right, top to bottom.
+
+Placeholders of the format: {sheet} / {hoja}, {sheetname} / {nombre}, {n}
+(format specs allowed: "{sheet}-{n:02}").
+"""
+
+import math
+import re
+from collections import defaultdict
+
+from katiecad.model.core import Leitung, Drahtnummer, BlockReferenz
+
+STANDARD = {"format": "{sheet}.{n}", "sps": True, "potenzial": False,
+            "hoehe": 2.5}
+LAGE_TOL = 0.3          # mm: label insertion point -> wire
+ARTEN_SPS = ("DI", "DO", "AI", "AO")
+
+
+def einstellungen(doku):
+    """Project settings merged over the defaults."""
+    e = dict(STANDARD)
+    if isinstance(doku, dict) and isinstance(doku.get("drahtnummern"), dict):
+        e.update({k: v for k, v in doku["drahtnummern"].items() if k in STANDARD})
+    return e
+
+
+def format_text(fmt, sheet, sheetname, n):
+    """'{sheet}.{n}' -> '3.12'. Invalid formats fall back to the default."""
+    werte = {"sheet": sheet, "hoja": sheet, "sheetname": sheetname,
+             "nombre": sheetname, "n": n}
+    try:
+        return str(fmt or STANDARD["format"]).format(**werte)
+    except (KeyError, IndexError, ValueError):
+        return STANDARD["format"].format(**werte)
+
+
+# ------------------------------------------------------------------
+# Geometry
+# ------------------------------------------------------------------
+def _abstand_segment(px, py, x1, y1, x2, y2):
+    dx, dy = x2 - x1, y2 - y1
+    l2 = dx * dx + dy * dy
+    if l2 <= 1e-12:
+        return math.hypot(px - x1, py - y1)
+    t = max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / l2))
+    return math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
+
+
+def leitung_unter(leitungen, x, y, tol=LAGE_TOL):
+    """Wire piece the point lies on (nearest within tol) or None."""
+    best, bd = None, tol
+    for l in leitungen:
+        d = _abstand_segment(x, y, l.x1, l.y1, l.x2, l.y2)
+        if d <= bd:
+            best, bd = l, d
+    return best
+
+
+def _laenge(l):
+    return math.hypot(l.x2 - l.x1, l.y2 - l.y1)
+
+
+def platzierung(l):
+    """(x, y, winkel) for a new label on wire piece l: centre of the piece,
+    text above a horizontal and left of a vertical wire."""
+    mx, my = (l.x1 + l.x2) / 2.0, (l.y1 + l.y2) / 2.0
+    senkrecht = abs(l.x2 - l.x1) < abs(l.y2 - l.y1)
+    return mx, my, (90.0 if senkrecht else 0.0)
+
+
+# ------------------------------------------------------------------
+# Wires = connected wire pieces
+# ------------------------------------------------------------------
+class _UF:
+    def __init__(self):
+        self.p = {}
+
+    def finde(self, a):
+        self.p.setdefault(a, a)
+        while self.p[a] != a:
+            self.p[a] = self.p[self.p[a]]
+            a = self.p[a]
+        return a
+
+    def vereinen(self, a, b):
+        ra, rb = self.finde(a), self.finde(b)
+        if ra != rb:
+            self.p[rb] = ra
+
+
+class Draht:
+    __slots__ = ("leitungen", "knoten", "nummer", "labels")
+
+    def __init__(self):
+        self.leitungen = []     # [(sheet, Leitung)]
+        self.knoten = []        # net nodes
+        self.nummer = ""
+        self.labels = []        # [(sheet, Drahtnummer)]
+
+    def blaetter(self):
+        out = []
+        for b, _l in self.leitungen:
+            if b not in out:
+                out.append(b)
+        return out
+
+
+def draehte(netz):
+    """Groups the wire pieces of a built net into wires.
+    -> [Draht] (only groups with at least one drawn wire piece)."""
+    uf = _UF()
+    for n in netz.knoten:
+        uf.finde(id(n))
+        for k in n.kanten:
+            uf.vereinen(id(k.a), id(k.b))
+        if n.art == "qv":
+            for p in n.partner:
+                uf.vereinen(id(n), id(p))
+    gruppen = defaultdict(Draht)
+    for n in netz.knoten:
+        gruppen[uf.finde(id(n))].knoten.append(n)
+    for (blatt, l), kante in netz.leitung_kanten():
+        gruppen[uf.finde(id(kante.a))].leitungen.append((blatt, l))
+    return [d for d in gruppen.values() if d.leitungen]
+
+
+# ------------------------------------------------------------------
+# Number sources
+# ------------------------------------------------------------------
+def _sps_art(block):
+    a = str((getattr(block, "attribute", None) or {}).get("SPS", "")).strip().upper()
+    return a if a in ARTEN_SPS else ""
+
+
+def sps_adresse(draht):
+    """'DI0.00' if the wire reaches a channel of a PLC I/O module, else ''."""
+    treffer = []
+    for n in draht.knoten:
+        if n.art != "pin" or not isinstance(n.bes, BlockReferenz):
+            continue
+        art = _sps_art(n.bes)
+        adr = (n.name or "").strip()
+        if not art or not re.search(r"\d", adr):
+            continue                     # supply pins (L+, M) are no channels
+        # 'DI0.00' stays, '0.00' -> 'DI0.00', Siemens style 'I0.0' / '%IX0.0' -> 'DI0.0'
+        rest = adr[len(art):] if adr.upper().startswith(art) else re.sub(r"^[%A-Za-z]+", "", adr)
+        treffer.append(art + rest)
+    return sorted(treffer)[0] if treffer else ""
+
+
+def potenzial(draht):
+    """Text of an unpaired cross reference (potential L1, 24V ...) or ''."""
+    texte = sorted({n.text for n in draht.knoten
+                    if n.art == "qv" and not n.partner and n.text})
+    return texte[0] if texte else ""
+
+
+def _sortierschluessel(draht, blatt):
+    """Left to right, top to bottom on the given sheet."""
+    pts = [(min(l.x1, l.x2), -max(l.y1, l.y2)) for b, l in draht.leitungen if b == blatt]
+    return min(pts) if pts else (0.0, 0.0)
+
+
+# ------------------------------------------------------------------
+# Plan
+# ------------------------------------------------------------------
+class Plan:
+    """Result of `planen`; applied per sheet with `anwenden`."""
+
+    def __init__(self):
+        self.draehte = []
+        self.neu = defaultdict(list)       # sheet -> [Drahtnummer]
+        self.weg = defaultdict(list)       # sheet -> [Drahtnummer]
+        self.text = []                     # [(Drahtnummer, new text)]
+
+    @property
+    def anzahl(self):
+        return (sum(len(v) for v in self.neu.values())
+                + sum(len(v) for v in self.weg.values()) + len(self.text))
+
+
+def planen(blaetter, netz, sheet_nr=None, sheet_name=None, einstellung=None,
+           neu_nummerieren=False):
+    """Computes the wire numbers of the whole project.
+
+    blaetter:  [(sheet key, elements)] in project order, the same that built `netz`
+    netz:      reports.netz.Netz built from `blaetter`
+    sheet_nr:  sheet key -> number shown in {sheet} (default: position + 1)
+    sheet_name: sheet key -> name for {sheetname}
+    neu_nummerieren: True = recompute every automatic number,
+                     False = only wires without a number get one.
+    -> Plan"""
+    e = einstellung or dict(STANDARD)
+    reihenfolge = {b: i for i, (b, _el) in enumerate(blaetter)}
+    sheet_nr = sheet_nr or (lambda b: reihenfolge.get(b, 0) + 1)
+    sheet_name = sheet_name or (lambda b: str(sheet_nr(b)))
+    hoehe = float(e.get("hoehe") or STANDARD["hoehe"])
+
+    plan = Plan()
+    ds = draehte(netz)
+    plan.draehte = ds
+    # labels -> wires
+    zu_draht = {}
+    for d in ds:
+        for b, l in d.leitungen:
+            zu_draht[(b, id(l))] = d
+    for b, elemente in blaetter:
+        leitungen = [l for l in elemente if isinstance(l, Leitung)]
+        for lab in elemente:
+            if not isinstance(lab, Drahtnummer):
+                continue
+            l = leitung_unter(leitungen, lab.x, lab.y)
+            d = zu_draht.get((b, id(l))) if l is not None else None
+            if d is not None:
+                d.labels.append((b, lab))
+            elif not lab.manuell:
+                plan.weg[b].append(lab)          # automatic label without wire
+
+    # numbers that are fixed (manual, or kept)
+    vergeben = set()
+    offen = []
+    for d in ds:
+        manuell = [lab for _b, lab in d.labels if lab.manuell and lab.inhalt.strip()]
+        auto = [lab for _b, lab in d.labels if not lab.manuell]
+        if manuell:
+            d.nummer = manuell[0].inhalt.strip()
+        elif auto and not neu_nummerieren:
+            d.nummer = auto[0].inhalt.strip()
+        elif e.get("sps", True) and sps_adresse(d):
+            d.nummer = sps_adresse(d)
+        elif e.get("potenzial") and potenzial(d):
+            d.nummer = potenzial(d)
+        else:
+            offen.append(d)
+            continue
+        vergeben.add(d.nummer)
+
+    # counter per sheet
+    offen.sort(key=lambda d: (reihenfolge.get(d.blaetter()[0], 0),
+                              _sortierschluessel(d, d.blaetter()[0])))
+    zaehler = defaultdict(int)
+    for d in offen:
+        b = d.blaetter()[0]
+        while True:
+            zaehler[b] += 1
+            t = format_text(e.get("format"), sheet_nr(b), sheet_name(b), zaehler[b])
+            if t not in vergeben:
+                break
+        d.nummer = t
+        vergeben.add(t)
+
+    # labels: one per wire and sheet
+    for d in ds:
+        pro_blatt = defaultdict(list)
+        for b, lab in d.labels:
+            pro_blatt[b].append(lab)
+        for b in d.blaetter():
+            labs = pro_blatt.get(b, [])
+            auto = [lab for lab in labs if not lab.manuell]
+            hat_manuell = any(lab.manuell for lab in labs)
+            if auto:
+                behalten = [] if hat_manuell else auto[:1]
+                for lab in behalten:
+                    if lab.inhalt != d.nummer or lab.auto_text != d.nummer:
+                        plan.text.append((lab, d.nummer))
+                plan.weg[b].extend(auto[len(behalten):])
+            elif not hat_manuell:
+                l = max((l for bb, l in d.leitungen if bb == b), key=_laenge)
+                x, y, w = platzierung(l)
+                plan.neu[b].append(Drahtnummer(x, y, d.nummer, hoehe=hoehe,
+                                               winkel=w, auto_text=d.nummer))
+    return plan
+
+
+def anwenden(plan, blatt, elemente):
+    """Applies the plan to the element list of ONE sheet (in place).
+    -> number of changes on that sheet."""
+    n = 0
+    weg = {id(x) for x in plan.weg.get(blatt, ())}
+    if weg:
+        vorher = len(elemente)
+        elemente[:] = [el for el in elemente if id(el) not in weg]
+        n += vorher - len(elemente)
+    ids = {id(el) for el in elemente}
+    for lab, text in plan.text:
+        if id(lab) in ids:
+            lab.inhalt = text
+            lab.auto_text = text
+            n += 1
+    for lab in plan.neu.get(blatt, ()):
+        elemente.append(lab)
+        n += 1
+    return n
+

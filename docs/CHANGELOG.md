@@ -1,5 +1,8 @@
 # Änderungen
 
+## Unveröffentlicht
+- Neu: **Drahtnummern** (Menü *Projekt › Drahtnummern vergeben…*, Befehl `DRAHTNUMMERN`): Jeder Draht (alles, was bis zur nächsten Klemme oder zum nächsten Gerätepin elektrisch verbunden ist, auch über Verbindungen und Querverweise) bekommt eine Nummer, die am Draht steht. Format je Projekt, Vorgabe `{sheet}.{n}` (Blattnummer + Zähler je Blatt, von links nach rechts, von oben nach unten); `{sheetname}` und Formatangaben wie `{n:02}` gehen auch. Drähte an einem SPS-Kanal erhalten dessen Adresse mit dem Baugruppentyp als Präfix (`DI0.00`, `DO1.07`, Siemens-Schreibweise `I0.0` wird `DI0.0`); wahlweise erhalten Drähte an einem Potenzial (Querverweis `L1`, `24V`) dessen Namen. Von Hand eingegebene oder geänderte Nummern werden nie überschrieben; „nur Drähte ohne Nummer“ oder „alle neu“
+
 ## 1.1.7
 - Neu: **Schriftköpfe auf Spanisch:** Feldnamen wie `DIBUJADO`, `REVISADO`, `NUMEROPLANO`, `PAGINA`, `FORMATO`, `TITULO1`–`3`, `ESTADO1`, `MODIFICACION1` (mit `_NOMBRE`/`_FECHA`) werden wie die deutschen und englischen Namen automatisch gefüllt. Dazu neue Vorlagen `title_block_A4_es`, `_A3_es` und `_A2-A0_es`
 - Neu: **Klemmen als Rechteck:** Im Klemmendialog gibt es unter *Darstellung* neben dem **Kreis** jetzt das **Rechteck mit Nummer** (5 × 8 mm, NUM in der Mitte, Anschlüsse oben/unten). Nebeneinander gesetzte Klemmen liegen bündig und bilden eine Klemmleiste; beide Darstellungen lassen sich mischen, alte Zeichnungen bleiben unverändert
