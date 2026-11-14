@@ -10980,7 +10980,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         """Wire number: number (a changed number becomes manual), core colour and
         cross-section (shown in the terminal diagram)."""
         dlg = FestMaskeDialog(
-            self.root, tr("dlg.draht.titel"), [], {},
+            self.root, tr("dlg.drahtnr.titel"), [], {},
             zusatz=[("nr", tr("dlg.draht.nummer"), el.inhalt),
                     ("farbe", tr("dlg.draht.farbe"), el.aderfarbe),
                     ("qs", tr("dlg.draht.querschnitt"), el.querschnitt)])
