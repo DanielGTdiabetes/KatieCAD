@@ -106,6 +106,21 @@ if ezdxf is not None:
         lts = sorted(e.dxf.linetype for e in d2.modelspace())
         check(lts == ["BYLAYER", "DIVIDE", "DOT"], f"DXF-Datei: {lts}")
         check("DIVIDE" in d2.linetypes, "LTYPE in der Datei")
+        check(not d2.audit().errors, "DXF-Prüfung ohne Fehler")
+        try:
+            import ezdwg
+        except ImportError:
+            ezdwg = None
+        if ezdwg is not None:
+            dwg = os.path.join(ordner, "lt.dwg")
+            b = DW.dxf_doc_zu_dwg(d, dwg, "R2018")
+            check(not b.fehler, f"DWG geschrieben: {b.text()}")
+            gelesen = ezdwg.read(dwg)
+            check(gelesen.linetypes()["DIVIDE"]["dashes"] == DLT.dashes("Strich-Zweipunktlinie"),
+                  "DWG: LTYPE-Muster")
+            lts_dwg = sorted(e.dxf.get("linetype") for e in gelesen.modelspace().query())
+            check(lts_dwg == ["BYLAYER", "DIVIDE", "DOT"], f"DWG-Elemente: {lts_dwg}")
+            print("(mit ezdwg)")
     finally:
         shutil.rmtree(ordner, ignore_errors=True)
     print("(mit ezdxf)")
