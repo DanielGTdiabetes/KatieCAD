@@ -2891,7 +2891,9 @@ class DokumentationDialog(tk.Toplevel):
               "gezeichnet", "geprueft", "revision", "datum")
     STANDARD = ("deckblatt", "inhalt", "geraete", "klemmen", "kabel")
     TYPEN = STANDARD + ("verbindungen", "stueckliste", "querverweise",
-                        "potenziale", "stecker", "etiketten", "revisionen", "sps")
+                        "potenziale", "stecker", "etiketten", "revisionen", "sps",
+                        "leistenbild")
+    SEITEN_MODI = ("auto", "oben_intern", "unten_intern", "oben_unten")
 
     def __init__(self, parent, vorlagen, einst, daten, projektname,
                  vorlage_vorgabe=None):
@@ -2921,6 +2923,16 @@ class DokumentationDialog(tk.Toplevel):
         self.v_klg = tk.BooleanVar(value=bool(einst.get("klemmen_geraete", True)))
         ttk.Checkbutton(f, text=tr("dlg.doku.klemmen_geraete"),
                         variable=self.v_klg).pack(anchor=tk.W, padx=10, pady=(4, 0))
+        sf = ttk.Frame(f)
+        sf.pack(anchor=tk.W, padx=10, pady=(4, 0))
+        ttk.Label(sf, text=tr("dlg.doku.klemmen_seiten")).pack(side=tk.LEFT, padx=(0, 6))
+        self._seiten_namen = [tr("dlg.doku.seiten." + m) for m in self.SEITEN_MODI]
+        modus = einst.get("klemmen_seiten")
+        self.cb_seiten = ttk.Combobox(sf, values=self._seiten_namen, state="readonly",
+                                      width=38)
+        self.cb_seiten.current(self.SEITEN_MODI.index(modus)
+                               if modus in self.SEITEN_MODI else 0)
+        self.cb_seiten.pack(side=tk.LEFT)
 
         ttk.Label(f, text=tr("dlg.doku.daten"), style="Title.TLabel").pack(
             anchor=tk.W, pady=(12, 2))
@@ -2993,6 +3005,7 @@ class DokumentationDialog(tk.Toplevel):
             "daten": {k: v.get().strip() for k, v in self.v_f.items()},
             "vorlage": pfad,
             "klemmen_geraete": bool(self.v_klg.get()),
+            "klemmen_seiten": self.SEITEN_MODI[max(0, self.cb_seiten.current())],
             "einpolig_auswerten": bool(self.v_ep.get()),
             "format": self.v_format.get(),
             "schrift": self.v_schrift.get() or "Arial",
@@ -3666,7 +3679,7 @@ class FestMaskeDialog(tk.Toplevel):
 
     def __init__(self, parent, titel, felder, werte=None, rolle=None, hinweis="",
                  zusatz=(), spiegel=None, ausgeblendet=None, einpolig=None, pole=None,
-                 darstellung=None):
+                 darstellung=None, trennplatte=None):
         super().__init__(parent)
         self.result = None
         werte = werte or {}
@@ -3724,6 +3737,13 @@ class FestMaskeDialog(tk.Toplevel):
                 ttk.Radiobutton(df, text=tr("dlg.klemme.darstellung." + w), value=w,
                                 variable=self.v_darst).pack(anchor=tk.W)
             row += 1
+        self.v_trenn = tk.BooleanVar(value=bool(trennplatte))
+        self._trenn = trennplatte is not None
+        if self._trenn:                      # terminal: partition plate after it
+            ttk.Checkbutton(f, text=tr("dlg.klemme.trennplatte"),
+                            variable=self.v_trenn).grid(
+                row=row, column=0, columnspan=3, sticky=tk.W, pady=(6, 0))
+            row += 1
         self.v_einpolig = tk.BooleanVar(value=bool(einpolig))
         self._einpolig = einpolig is not None
         if self._einpolig:
@@ -3775,6 +3795,7 @@ class FestMaskeDialog(tk.Toplevel):
                        "spiegel": self.v_spiegel.get() if self._spiegel else None,
                        "einpolig": bool(self.v_einpolig.get()) if self._einpolig else None,
                        "darstellung": self.v_darst.get() if self._darst else None,
+                       "trennplatte": bool(self.v_trenn.get()) if self._trenn else None,
                        "pole": self.v_pole.get().strip() if self._pole else None,
                        "zusatz": {k: v.get().strip() for k, v in self._zvars.items()},
                        "ausgeblendet": {t for t, v in self._sicht.items() if not v.get()}}

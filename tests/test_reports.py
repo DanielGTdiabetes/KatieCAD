@@ -106,7 +106,7 @@ check([len(z.get("_bruecke", ())) for z in _r] == [1, 2, 2, 1], "Bruecke: zwei B
 check({b[0] for z in _r for b in z["_bruecke"]} == {0, 1}, "Bruecke: ueberlappende Bruecken in verschiedenen Bahnen")
 _sp = S._ohne_leere_einbauorte(S.lade_spalten("klemmen")[0], _r)
 _keys = [x.key for x in _sp]
-check(_keys.index("oben") < _keys.index("num") < _keys.index("bruecke") < _keys.index("unten"), f"Spaltenfolge: {_keys}")
+check(_keys.index("extern") < _keys.index("num") < _keys.index("bruecke") < _keys.index("intern"), f"Spaltenfolge: {_keys}")
 _pg = T.tabellen_seiten(_sp, T.zeilen_vorbereiten(_r, "_gk", ("leiste",)), (10, 10, 280, 190), "K")
 check(sum(1 for e in _pg[0] if e.typ == "schraffur") == 4, "vier Bruecken-Punkte")
 _zz = D.klemmenplan(_n, [(0, _el)], nr) + [dict(_r[0], leiste="X3", _gk=("", "X3"), num="1")]
@@ -297,7 +297,7 @@ with tempfile.TemporaryDirectory() as tmp:
     tab = S.tabellen_fuer_export([(0, el1)], nr)
     paths = ANW.csv_exportieren(os.path.join(tmp, "csv"), tab, {"geraete": "Geraeteliste", "klemmen": "Klemmenplan", "kabel": "Kabelplan"})
     txtk = open(paths[1], encoding="utf-8-sig").read().splitlines()
-    check(len(paths) == len(S.LISTEN) and txtk[0].split(";")[0] == "Klemmleiste (ID)" and txtk[1].startswith("X1;;WDU 2.5;L1;1;U1 (W1/L1);1/1/B"), f"CSV Klemmenplan: {txtk[:2]}")
+    check(len(paths) == len(S.LISTEN) and txtk[0].split(";")[0] == "Klemmleiste (ID)" and txtk[1].startswith("X1;;WDU 2.5;W1 / L1;1,5 mm²;U1 (W1/L1);1;L1;1/1/B"), f"CSV Klemmenplan: {txtk[:2]}")
 
 # PDF: report sheet is also printed from the layout for source 'modell'
 from katiecad.fileio import pdf as P
@@ -375,13 +375,15 @@ with tempfile.TemporaryDirectory() as tmp:
     check(zf.testzip() is None and "xl/worksheets/sheet3.xml" in zf.namelist() and "xl/worksheets/sheet4.xml" not in zf.namelist(), "App: Excel-Datei mit 3 Blaettern")
     check("3 Liste(n)" in fake.meldung or "3 list(s)" in fake.meldung, f"App: Excel-Meldung {fake.meldung}")
     wbx = zf.read("xl/workbook.xml").decode("utf-8")
+    zf.close()                  # Windows: an open file cannot be deleted with the temp folder
     check(katiecad_i18n.tr("rep.geraete") in wbx and katiecad_i18n.tr("rep.kabel") in wbx, "Excel: Blattnamen")
     from katiecad.reports.xlsx import xlsx_schreiben, blattname
     xp2 = os.path.join(tmp, "t.xlsx")
     n2 = xlsx_schreiben(xp2, [("A/B:C", [("Pos.", "pos", True), ("IND", "ind", False)],
                                 [{"pos": "7", "ind": "007"}, {"pos": "x", "ind": "a<&>\x01b"}]), ("A/B:C", [("X", "x", False)], [])])
     check(n2 == ["A-B-C", "A-B-C 2"], f"Excel: Blattnamen eindeutig/gueltig {n2}")
-    sh = zipfile.ZipFile(xp2).read("xl/worksheets/sheet1.xml").decode("utf-8")
+    with zipfile.ZipFile(xp2) as _zf2:
+        sh = _zf2.read("xl/worksheets/sheet1.xml").decode("utf-8")
     check("<v>7</v>" in sh and ">007<" in sh and "a&lt;&amp;&gt;b" in sh, "Excel: Zahl/Text/Escape")
     check(blattname("x" * 40, set()) == "x" * 31, "Excel: Name max. 31 Zeichen")
     # no project

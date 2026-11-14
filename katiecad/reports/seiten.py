@@ -26,6 +26,7 @@ from katiecad.reports import tabelle as TAB
 from katiecad.reports import daten as D
 from katiecad.reports import daten_listen as DL
 from katiecad.reports import daten_sps as DS
+from katiecad.reports import leistenbild as LB
 from katiecad.reports.netz import Netz
 from katiecad.reports.tabelle import (Spalte, tabellen_seiten,
                                       zeilen_vorbereiten, TEXT, LINIE)
@@ -44,11 +45,14 @@ def skala_fuer(fmt):
     return ZEICHNUNGSFORMATE[fmt][0] / ZEICHNUNGSFORMATE[FORMAT][0]
 STANDARD_TYPEN = ("deckblatt", "inhalt", "geraete", "klemmen", "kabel")
 TYPEN = STANDARD_TYPEN + ("verbindungen", "stueckliste", "querverweise",
-                          "potenziale", "stecker", "etiketten", "revisionen", "sps")
+                          "potenziale", "stecker", "etiketten", "revisionen", "sps",
+                          "leistenbild")
 LISTEN = ("geraete", "klemmen", "kabel", "verbindungen", "stueckliste",
           "querverweise", "potenziale", "stecker", "etiketten", "revisionen", "sps")
 NETZ_LISTEN = {"sps", "klemmen", "kabel", "verbindungen", "stueckliste", "querverweise",
-               "potenziale", "stecker", "etiketten"}
+               "potenziale", "stecker", "etiketten", "leistenbild"}
+GRAFIKEN = ("leistenbild",)        # drawings (no table, not in CSV / Excel)
+SEITEN_MODI = D.SEITEN_MODI        # terminal diagram: external / internal side
 
 TITEL_TAGS = TB.DATA_TAGS          # (kept for compatibility)
 DATEN_SCHLUESSEL = ("anlage", "kunde", "auftrag", "zeichnungsnummer", "firma",
@@ -101,15 +105,23 @@ _STANDARD = {
                 ("anzahl", "rep.col.anzahl", 9, "r"),
                 ("ort", "rep.col.fundstellen", 50, "l"),
                 ("funktion", "rep.col.funktion", 40, "l")],
-    "klemmen": [("leiste", "rep.col.leiste", 16, "l"),
-                ("einbauort", "rep.col.einbauort", 26, "l"),
-                ("hersteller", "rep.col.hersteller", 22, "l"),
-                ("typ", "rep.col.typ", 26, "l"),
-                ("oben", "rep.col.oben", 48, "l"),
-                ("num", "rep.col.num", 10, "l"),
-                ("bruecke", "rep.col.bruecke", 16, "c"),
-                ("unten", "rep.col.unten", 48, "l"), ("ort", "rep.col.ort", 20, "l"),
-                ("funktion", "rep.col.funktion", 40, "l")],
+    # "rep.col.s_xxx|extern": title with the side name (see _titel)
+    "klemmen": [("leiste", "rep.col.leiste", 14, "l"),
+                ("einbauort", "rep.col.einbauort", 22, "l"),
+                ("hersteller", "rep.col.hersteller", 16, "l"),
+                ("typ", "rep.col.typ", 18, "l"),
+                ("extern_kabel", "rep.col.s_kabel|extern", 18, "l"),
+                ("extern_leiter", "rep.col.s_leiter|extern", 16, "l"),
+                ("extern_draht", "rep.col.s_draht|extern", 14, "l"),
+                ("extern", "rep.col.s_ziel|extern", 40, "l"),
+                ("num", "rep.col.num", 9, "l"),
+                ("bruecke", "rep.col.bruecke", 12, "c"),
+                ("intern", "rep.col.s_ziel|intern", 40, "l"),
+                ("intern_draht", "rep.col.s_draht|intern", 14, "l"),
+                ("intern_leiter", "rep.col.s_leiter|intern", 16, "l"),
+                ("intern_kabel", "rep.col.s_kabel|intern", 18, "l"),
+                ("ort", "rep.col.ort", 16, "l"),
+                ("funktion", "rep.col.funktion", 34, "l")],
     "kabel": [("cab", "rep.col.cab", 14, "l"),
               ("einbauort", "rep.col.einbauort", 26, "l"),
               ("hersteller", "rep.col.hersteller", 22, "l"),
@@ -162,10 +174,22 @@ _STANDARD = {
 _OPTIONEN = {"textgroesse": 2.5, "zeilenhoehe": 6.0}
 
 
-def lade_spalten(typ, ordner=()):
+def _titel(t, seiten="auto"):
+    """Column title: 'rep.col.s_draht|extern' -> 'Wire ext.'; in the mode
+    'oben_unten' the external side is 'top' and the internal one 'bottom'."""
+    if "|" not in t:
+        return tr(t)
+    schl, seite = t.split("|", 1)
+    if seiten == "oben_unten":
+        seite = {"extern": "oben", "intern": "unten"}.get(seite, seite)
+    return tr(schl, seite=tr("rep.seite." + seite))
+
+
+def lade_spalten(typ, ordner=(), seiten="auto"):
     """(columns, options). `ordner`: folders containing <type>.json (later =
-    higher priority). Faulty files are ignored."""
-    spalten = [Spalte(k, tr(t), g, a) for k, t, g, a in _STANDARD[typ]]
+    higher priority). Faulty files are ignored. `seiten`: side mode of the
+    terminal diagram (only changes the built-in titles)."""
+    spalten = [Spalte(k, _titel(t, seiten), g, a) for k, t, g, a in _STANDARD[typ]]
     opt = dict(_OPTIONEN)
     for o in ordner:
         pfad = os.path.join(o, typ + ".json")
@@ -294,14 +318,15 @@ def deckblatt_inhalt(daten, projektname, flaeche, heute, sprache, skala=1.0):
 # Rows per report type (also for the CSV export)
 # ------------------------------------------------------------------
 def listen_zeilen(typ, blaetter, nummer, netz=None, klemmen_in_geraeteliste=True,
-                  einbauorte=None, katalog=None, projektdaten=None):
+                  einbauorte=None, katalog=None, projektdaten=None, klemmen_seiten="auto"):
     """Rows of a list report. blaetter: [(idx, elements)];
-    einbauorte: {idx: installation location of the sheet}."""
+    einbauorte: {idx: installation location of the sheet};
+    klemmen_seiten: side mode of the terminal diagram (SEITEN_MODI)."""
     if typ == "geraete":
         return D.geraeteliste(blaetter, nummer, netz, klemmen_in_geraeteliste,
                               einbauorte)
-    if typ == "klemmen":
-        return D.klemmenplan(netz, blaetter, nummer, einbauorte)
+    if typ in ("klemmen", "leistenbild"):
+        return D.klemmenplan(netz, blaetter, nummer, einbauorte, klemmen_seiten)
     if typ == "kabel":
         return D.kabelplan(netz, blaetter, nummer, einbauorte)
     if typ == "verbindungen":
@@ -330,26 +355,32 @@ def netz_aufbauen(blaetter):
     return Netz.aufbauen(blaetter)
 
 
+_OPTIONAL = {"einbauort", "funktion"} | {
+    p + "_" + k for p in D.SEITEN for k in ("draht", "kabel", "farbe", "querschnitt",
+                                             "leiter")}
+
+
 def _ohne_leere_einbauorte(spalten, zeilen):
     """Columns without content disappear: 'einbauort' without any location,
-    'bruecke' without any bridge."""
+    'bruecke' without any bridge, wire / cable / conductor columns of the
+    terminal diagram without any value."""
     return [sp for sp in spalten
-            if not (sp.key == "einbauort" and not any(z.get("einbauort") for z in zeilen))
-            and not (sp.key == "funktion" and not any(z.get("funktion") for z in zeilen))
+            if not (sp.key in _OPTIONAL and not any(z.get(sp.key) for z in zeilen))
             and not (sp.key == "bruecke" and not any(z.get("_bruecke") for z in zeilen))]
 
 
 def tabellen_fuer_export(blaetter, nummer, ordner=(), klemmen_in_geraeteliste=True,
-                         einbauorte=None, katalog=None, projektdaten=None):
+                         einbauorte=None, katalog=None, projektdaten=None,
+                         klemmen_seiten="auto"):
     """{type: (columns, rows)} for all lists (device list, terminal diagram,
     cable plan, connection list, parts list ...)."""
     netz = netz_aufbauen(blaetter)
     out = {}
     for typ in LISTEN:
-        spalten, _opt = lade_spalten(typ, ordner)
+        spalten, _opt = lade_spalten(typ, ordner, klemmen_seiten)
         zeilen = listen_zeilen(typ, blaetter, nummer, netz,
                                klemmen_in_geraeteliste, einbauorte,
-                               katalog, projektdaten)
+                               katalog, projektdaten, klemmen_seiten)
         out[typ] = (_ohne_leere_einbauorte(spalten, zeilen), zeilen)
     return out
 
@@ -360,8 +391,11 @@ _GRUPPE = {"klemmen": ("_gk", ("leiste", "einbauort")),
            "sps": ("_gk", ("station", "baugruppe", "einbauort"))}
 
 
-def _liste_tabelle(typ, zeilen, ordner, flaeche, titel, skala=1.0):
-    spalten, opt = lade_spalten(typ, ordner)
+def _liste_tabelle(typ, zeilen, ordner, flaeche, titel, skala=1.0, seiten="auto"):
+    if typ in GRAFIKEN:
+        return LB.leistenbild_seiten(zeilen, flaeche, titel, skala,
+                                     tr("rep.lb.leiste"))
+    spalten, opt = lade_spalten(typ, ordner, seiten)
     spalten = _ohne_leere_einbauorte(spalten, zeilen)
     gruppe, leer = _GRUPPE.get(typ, (None, ()))
     if gruppe:
@@ -377,7 +411,7 @@ def seitennamen(typ, basis, seiten):
     (location first: 'Klemmenplan +1 -X1'; '... -X1 2/3' if the strip needs several sheets);
     otherwise 'Name 1/3'."""
     n = len(seiten)
-    if typ != "klemmen":
+    if typ not in ("klemmen", "leistenbild"):
         return [_name(basis, k + 1, n) for k in range(n)]
     labels = []
     for sp in seiten:
@@ -404,7 +438,7 @@ def _name(basis, k, n):
 # ------------------------------------------------------------------
 def _berichte_erzeugen(blaetter, projektname, daten, aktiv, vorlage, sprache,
                       ordner=(), heute=None, klemmen_in_geraeteliste=True,
-                      format=FORMAT, katalog=None):
+                      format=FORMAT, katalog=None, klemmen_seiten="auto"):
     """Creates the requested report sheets (format: drawing format name, A4 or A3;
     texts and row heights are scaled with the sheet).
 
@@ -434,13 +468,13 @@ def _berichte_erzeugen(blaetter, projektname, daten, aktiv, vorlage, sprache,
             return v + idx + 1
 
         listen = {}
-        for typ in LISTEN:
+        for typ in LISTEN + GRAFIKEN:
             if typ in aktiv:
                 zeilen = listen_zeilen(typ, basis, nummer, netz,
                                        klemmen_in_geraeteliste, einbauorte,
-                                       katalog, ctx["daten"])
+                                       katalog, ctx["daten"], klemmen_seiten)
                 listen[typ] = _liste_tabelle(typ, zeilen, ordner, flaeche,
-                                             namen[typ], skala)
+                                             namen[typ], skala, klemmen_seiten)
         hinten_n = sum(len(p) for p in listen.values())
         gesamt = vorn + len(blaetter) + hinten_n
         if "inhalt" not in aktiv:
@@ -455,7 +489,7 @@ def _berichte_erzeugen(blaetter, projektname, daten, aktiv, vorlage, sprache,
         for b in blaetter:
             eintraege.append((b.name, b.beschreibung,
                               getattr(b, "art", "") or tr("rep.art.zeichnung")))
-        for typ in LISTEN:
+        for typ in LISTEN + GRAFIKEN:
             seiten = listen.get(typ, [])
             for nm in seitennamen(typ, namen[typ], seiten):
                 eintraege.append((nm, "", namen[typ]))
@@ -485,7 +519,7 @@ def _berichte_erzeugen(blaetter, projektname, daten, aktiv, vorlage, sprache,
                                 namen["inhalt"], el, ctx, nr, gesamt))
     hinten = []
     nr = len(vorne) + len(blaetter)
-    for typ in LISTEN:
+    for typ in LISTEN + GRAFIKEN:
         seiten = listen.get(typ, [])
         for nm, el in zip(seitennamen(typ, namen[typ], seiten), seiten):
             nr += 1

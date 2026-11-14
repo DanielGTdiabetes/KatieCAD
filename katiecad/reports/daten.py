@@ -8,7 +8,8 @@ are 0-based indices of the drawing sheets; `nummer(idx)` returns the
 displayed sheet number (it depends on how many report sheets precede it).
 """
 
-from collections import defaultdict
+import re
+from collections import Counter, defaultdict
 
 from katiecad.model.core import ElektroMaske, ort_text
 from katiecad.electrical.logic import (REF_FELD, geraete, felder_aus_elementen, feld_an,
@@ -136,9 +137,78 @@ def geraeteliste(blaetter, nummer, netz=None, klemmenleisten=True,
 # ------------------------------------------------------------------
 # Terminal diagram
 # ------------------------------------------------------------------
-def klemmenplan(netz, blaetter, nummer, einbauorte=None):
+SEITEN_MODI = ("auto", "oben_intern", "unten_intern", "oben_unten")
+SEITEN = ("extern", "intern")
+# IEC 60757 colour codes: a cable core named like this is a colour, not a number
+FARBCODES = {"BK", "BN", "RD", "OG", "YE", "GN", "BU", "VT", "GY", "WH", "PK",
+             "GD", "TQ", "SR", "GNYE", "GN/YE", "GN-YE", "YEGN"}
+_QS = re.compile(r"\d+\s*[xXgG×]\s*(\d+(?:[.,]\d+)?)")
+
+
+def querschnitt_aus_typ(typ):
+    """Cross-section from a cable type: '4G1,5' -> '1,5', 'ÖLFLEX 3x2.5' -> '2.5'."""
+    m = _QS.search(str(typ or ""))
+    return m.group(1) if m else ""
+
+
+def leiter_text(farbe, querschnitt):
+    """'BK 1,5 mm²' (only the parts that exist)."""
+    teile = [t for t in (farbe, (querschnitt + " mm²") if querschnitt else "") if t]
+    return " ".join(teile)
+
+
+def _seiten_zuordnung(modus, kabel_oben, kabel_unten):
+    """-> {"extern": 'oben'|'unten', "intern": ...} of one terminal strip.
+    auto: the side reached through cables is external (field side); if both or
+    none are, the top side is internal (devices of the cabinet above).
+    oben_unten: old layout, top in the first (left) column."""
+    if modus == "unten_intern":
+        intern = "unten"
+    elif modus in ("oben_intern",):
+        intern = "oben"
+    elif modus == "oben_unten":
+        intern = "unten"
+    elif kabel_oben > kabel_unten:
+        intern = "unten"
+    else:
+        intern = "oben"
+    return {"intern": intern, "extern": "unten" if intern == "oben" else "oben"}
+
+
+def _seiten_daten(netz, z, kab_typ):
+    """Wire number, cable/core, colour and cross-section of both sides of a row."""
+    for seite in ("oben", "unten"):
+        node, t = z["_t"][seite]
+        kabel = []
+        for _n, via in t:
+            if via and via[0] not in kabel:
+                kabel.append(via[0])
+        drahte = [node.draht] if node.draht else []
+        if not drahte:
+            drahte = sorted({n.draht for n, _v in t if n.draht}, key=natuerlich)[:1]
+        farbe, qs = node.draht_daten
+        if kabel:
+            cab, ader = kabel[0]
+            if not farbe and ader.strip().upper() in FARBCODES:
+                farbe = ader.strip()
+            qs = qs or querschnitt_aus_typ(kab_typ.get(cab, ""))
+        z["_s"][seite] = {
+            "draht": drahte[0] if drahte else "",
+            "kabel": [f"{c} / {a}" if c else a for c, a in kabel],
+            "_cab": kabel[0][0] if kabel else "",
+            "farbe": farbe, "querschnitt": qs,
+            "leiter": leiter_text(farbe, qs)}
+
+
+def klemmenplan(netz, blaetter, nummer, einbauorte=None, seiten="auto"):
     """One row per terminal, sorted by terminal strip (IND) and number (NUM).
     Rows: leiste, einbauort, num, hersteller, typ, per, oben (list), unten (list), ort.
+
+    Sides: `seiten` (SEITEN_MODI) maps top/bottom to external/internal per
+    strip. For both sides p in ("extern", "intern") the rows carry
+    p (targets), p_draht (wire number), p_kabel ('-W3 / 2'), p_farbe,
+    p_querschnitt, p_leiter ('BK 1,5 mm²') and `_seiten` = {p: 'oben'|'unten'}.
+    `_trenn` = partition plate after the terminal.
 
     Terminals of the same strip whose top (or bottom) sides are wired
     directly together form a BRIDGE group: only its first terminal lists the
@@ -160,12 +230,35 @@ def klemmenplan(netz, blaetter, nummer, einbauorte=None):
             "ort": _ort(nummer, kl["blatt"],
                         feld_an(felder.get(kl["blatt"], []), *_pos(k))),
             "funktion": funktion_an(ftexte.get(kl["blatt"], []), *_pos(k)),
-            "_blatt": kl["blatt"], "_pos": _pos(k), "_kl": kl})
+            "_trenn": bool(getattr(k, "trennplatte", False)),
+            "_blatt": kl["blatt"], "_pos": _pos(k), "_kl": kl, "_t": {}, "_s": {}})
     zeilen.sort(key=lambda r: (natuerlich(r["einbauort"]), r["leiste"] == "",
                                natuerlich(r["leiste"]),
                                natuerlich(r["num"]) if r["num"] else (),
                                r["_blatt"], -r["_pos"][1], r["_pos"][0]))
     _bruecken(netz, zeilen)
+    kab_typ = {}
+    for kb in netz.kabel:
+        cab = (kb["obj"].werte.get("CAB", "") or "").strip()
+        kab_typ[cab] = kab_typ.get(cab) or (kb["obj"].werte.get("TYP", "") or "").strip()
+    zaehler = defaultdict(Counter)
+    for z in zeilen:
+        _seiten_daten(netz, z, kab_typ)
+        for seite in ("oben", "unten"):
+            zaehler[z["_gk"]][seite] += bool(z["_s"][seite]["kabel"])
+    modus = seiten if seiten in SEITEN_MODI else "auto"
+    for z in zeilen:
+        c = zaehler[z["_gk"]]
+        zuo = _seiten_zuordnung(modus, c["oben"], c["unten"])
+        z["_seiten"] = zuo
+        for p in SEITEN:
+            d = z["_s"][zuo[p]]
+            z[p] = z[zuo[p]]
+            for k in ("draht", "kabel", "farbe", "querschnitt", "leiter"):
+                z[p + "_" + k] = d[k]
+            z["_" + p + "_cab"] = d["_cab"]
+        z.pop("_t", None)
+        z.pop("_s", None)
     # The function text is shown only at the first terminal of a run with the same text
     letzte = {}
     for z in zeilen:
@@ -215,6 +308,7 @@ def _bruecken(netz, zeilen):
             node = z["_kl"][seite]
             t = netz.ziele(node)
             treffer[(i, seite)] = (node, t)
+            z["_t"][seite] = (node, t)
             for n, _via in t:
                 j = nach_obj.get(id(n.bes)) if n.art == "klemme" else None
                 if (j is not None and j != i and n.seite == seite
@@ -257,6 +351,8 @@ def _bruecken(netz, zeilen):
             punkt = i in mitglieder
             z.setdefault("_bruecke", []).append(
                 (lane, punkt, i > von, i < bis))
+            z.setdefault("_bruecke_s", []).append(
+                (seite, lane, punkt, i > von, i < bis))
         for i in mitglieder:
             z = zeilen[i]
             andere = [zeilen[m]["num"] or "?" for m in mitglieder if m != i]

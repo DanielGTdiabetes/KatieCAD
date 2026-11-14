@@ -5080,6 +5080,9 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         if isinstance(el, Querverweis):
             self._qv_bearbeiten(el)
             return
+        if isinstance(el, Drahtnummer):
+            self._drahtnummer_bearbeiten(el)
+            return
         if isinstance(el, Verbindung):
             self._verbindung_bearbeiten(el)
             return
@@ -10883,6 +10886,23 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         el.raster = dlg.result["raster"]
         self.redraw()
 
+    def _drahtnummer_bearbeiten(self, el):
+        """Wire number: number (a changed number becomes manual), core colour and
+        cross-section (shown in the terminal diagram)."""
+        dlg = FestMaskeDialog(
+            self.root, tr("dlg.draht.titel"), [], {},
+            zusatz=[("nr", tr("dlg.draht.nummer"), el.inhalt),
+                    ("farbe", tr("dlg.draht.farbe"), el.aderfarbe),
+                    ("qs", tr("dlg.draht.querschnitt"), el.querschnitt)])
+        if dlg.result is None:
+            return
+        z = dlg.result.get("zusatz", {})
+        self._snapshot()
+        el.inhalt = z.get("nr", el.inhalt) or el.inhalt
+        el.aderfarbe = z.get("farbe", "")
+        el.querschnitt = z.get("qs", "")
+        self.redraw()
+
     def _fest_bearbeiten(self, el):
         ist_maske = isinstance(el, ElektroMaske)
         dlg = FestMaskeDialog(
@@ -10894,7 +10914,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             else tr("dlg.klemme.hinweis"),
             ausgeblendet=el.ausgeblendet, einpolig=el.einpolig,
             pole=el.pole if ist_maske else None,
-            darstellung=None if ist_maske else el.darstellung)
+            darstellung=None if ist_maske else el.darstellung,
+            trennplatte=None if ist_maske else el.trennplatte)
         if dlg.result is None:
             return
         self._snapshot()
@@ -10905,6 +10926,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             el.einpolig = dlg.result["einpolig"]
         if not ist_maske and dlg.result.get("darstellung"):
             el.darstellung = dlg.result["darstellung"]
+        if not ist_maske and dlg.result.get("trennplatte") is not None:
+            el.trennplatte = dlg.result["trennplatte"]
         if ist_maske and dlg.result.get("pole") is not None:
             el.pole = dlg.result["pole"]
         if ist_maske and dlg.result["rolle"]:
@@ -11572,8 +11595,10 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self.status.set(tr("msg.doku.keine_auswahl"))
             return
         p.daten = {**p.daten, **res["daten"]}      # keeps the revision table
-        p.doku = {"berichte": res["berichte"], "vorlage": res["vorlage"],
+        # keeps other settings (e.g. wire numbering) stored in p.doku
+        p.doku = {**p.doku, "berichte": res["berichte"], "vorlage": res["vorlage"],
                   "klemmen_geraete": res["klemmen_geraete"],
+                  "klemmen_seiten": res.get("klemmen_seiten", "auto"),
                   "einpolig_auswerten": bool(res.get("einpolig_auswerten")),
                   "format": res.get("format", "a4"),
                   "schrift": res.get("schrift", "Arial")}
@@ -11594,7 +11619,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                 klemmen_in_geraeteliste=res["klemmen_geraete"],
                 format=SEI.format_name(res.get("format")),
                 katalog=p.daten.get("bauteile", []),
-                schrift=res.get("schrift", "Arial"))
+                schrift=res.get("schrift", "Arial"),
+                klemmen_seiten=res.get("klemmen_seiten", "auto"))
             basis = self._leere_zeichnung_daten(einstellungen_uebernehmen=True)
             neu_aktiv = ANW.ins_projekt(p, vorne, hinten, basis,
                                         self._json_atomar_schreiben,
@@ -11634,7 +11660,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                 SEI.spalten_ordner(programm, p.ordner),
                 bool(p.doku.get("klemmen_geraete", True)),
                 {k: b.einbauort for k, b in enumerate(infos)},
-                p.daten.get("bauteile", []), p.daten)
+                p.daten.get("bauteile", []), p.daten,
+                klemmen_seiten=p.doku.get("klemmen_seiten", "auto"))
             namen = {t: tr("rep." + t) for t in tabellen}
             pfade = ANW.csv_exportieren(ziel, tabellen, namen)
         except OSError as e:
@@ -11690,7 +11717,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                 SEI.spalten_ordner(programm, p.ordner),
                 bool(p.doku.get("klemmen_geraete", True)),
                 {k: b.einbauort for k, b in enumerate(infos)},
-                p.daten.get("bauteile", []), p.daten)
+                p.daten.get("bauteile", []), p.daten,
+                klemmen_seiten=p.doku.get("klemmen_seiten", "auto"))
         except Exception as e:
             import traceback
             traceback.print_exc()

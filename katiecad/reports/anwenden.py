@@ -92,9 +92,27 @@ def csv_exportieren(ordner, tabellen, namen):
     return out
 
 
-def xlsx_exportieren(pfad, tabellen, namen, auswahl=None):
+def nach_gruppe(zeilen):
+    """[(group key `_gk`, [rows])] in row order (e.g. one entry per terminal strip)."""
+    out = []
+    for z in zeilen:
+        if not out or out[-1][0] != z.get("_gk"):
+            out.append((z.get("_gk"), []))
+        out[-1][1].append(z)
+    return out
+
+
+def leisten_name(gk):
+    """'+UV1 -X2' / '-X1' of a terminal strip group key (location, strip)."""
+    eo, leiste = gk if isinstance(gk, tuple) and len(gk) == 2 else ("", "")
+    return ((eo + " ") if eo else "") + (leiste or "-")
+
+
+def xlsx_exportieren(pfad, tabellen, namen, auswahl=None, je_leiste=("klemmen",)):
     """All (or the chosen) lists into ONE Excel workbook, one sheet per list.
     tabellen: {type: (columns, rows)}, namen: {type: sheet name}, auswahl: list of types.
+    je_leiste: lists that get one sheet per group instead (terminal diagram: one
+    sheet per terminal strip, named after the strip).
     -> list of the sheet names written."""
     from katiecad.reports.xlsx import xlsx_schreiben
     blaetter = []
@@ -102,5 +120,9 @@ def xlsx_exportieren(pfad, tabellen, namen, auswahl=None):
         if auswahl is not None and typ not in auswahl:
             continue
         sp = [(s.titel, s.key, s.ausr == "r") for s in spalten]
+        if typ in je_leiste and zeilen:
+            for gk, teil in nach_gruppe(zeilen):
+                blaetter.append((leisten_name(gk), sp, teil))
+            continue
         blaetter.append((namen.get(typ, typ), sp, zeilen))
     return xlsx_schreiben(pfad, blaetter)
