@@ -114,7 +114,7 @@ from katiecad.electrical.logic import (leitungen_automatisch, kabel_kreuzungen, 
                               geraete_aus_blattdaten, geraete_referenzen,
                               naechster_leitungspunkt, leitung_teilen,
                               vollstaendige_verbindungen, vollstaendige_leitungen,
-                              leitungen_einrasten,
+                              leitungen_einrasten, pins_ausrichten,
                               verbindungen_bereinigen)
 from types import SimpleNamespace
 
@@ -251,6 +251,9 @@ KULL_AB = 800
 KULL_RAND_PX = 150
 _KULL_TYPEN = (Linie, Kreis, Bogen, Polylinie, Schraffur, Text)
 _KULL_WINZIG = (Linie, Kreis, Bogen, Polylinie)
+
+
+MIN_TEXT_PX = 5.0       # screen clean-up: texts lower than this are not drawn
 
 
 class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
@@ -451,6 +454,11 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         core.XREF_LADER = self._xref_datei_laden
         core.XREF_BASIS = self._xref_basis
         self.leistung_var = tk.BooleanVar(value=False)       # shows redraw times (not saved)
+        _cfg = lade_konfiguration()
+        # pin magnet: inserted/moved devices snap onto pins up to 1.5 mm beside them (saved)
+        self.pin_magnet_var = tk.BooleanVar(value=bool(_cfg.get("pin_magnet", True)))
+        # screen: hide empty mask fields and details too small to read (saved)
+        self.detail_aufraeumen_var = tk.BooleanVar(value=bool(_cfg.get("detail_aufraeumen", True)))
         self.dxf_iso_var = tk.StringVar(
             value="linien" if lade_konfiguration().get("dxf_iso") == "linien" else "text")
         self._pts = []
@@ -1537,6 +1545,15 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         m_einst.add_cascade(label=tr("menu.einst.dxfiso"), menu=m_dxfiso)
         m_einst.add_checkbutton(label=tr("menu.einst.leistung"), variable=self.leistung_var,
                                 command=self.redraw)
+        m_einst.add_separator()
+        m_einst.add_checkbutton(label=tr("menu.einst.pin_magnet"), variable=self.pin_magnet_var,
+                                command=lambda: self._einst_speichern(
+                                    "pin_magnet", self.pin_magnet_var.get()))
+        m_einst.add_checkbutton(label=tr("menu.einst.detail_aufraeumen"),
+                                variable=self.detail_aufraeumen_var,
+                                command=lambda: (self._einst_speichern(
+                                    "detail_aufraeumen", self.detail_aufraeumen_var.get()),
+                                    self.redraw()))
         menubar.add_cascade(label=tr("menu.einstellungen"), menu=m_einst)
 
         # Help
@@ -5825,6 +5842,24 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             return max(basis * 2, 0.7)
         return basis
 
+    def _aufgeraeumt(self):
+        """Screen clean-up active (Settings > Hide empty fields and tiny details)."""
+        v = getattr(self, "detail_aufraeumen_var", None)
+        return v is not None and bool(v.get())
+
+    @staticmethod
+    def _ohne_vorlagewerte(el):
+        """Texts of a mask/terminal without template values: a field whose value is
+        its own name (TYP in field TYP, as a library symbol brings it) stays empty,
+        the same rule as in the reports (wert_gesetzt)."""
+        alt = el.werte
+        el.werte = {t: ("" if str(v).strip().upper() == t.upper() else v)
+                    for t, v in alt.items()}
+        try:
+            return el.aufgeloest()
+        finally:
+            el.werte = alt
+
     def _zeichne_element(self, el, tags=("element",), tf=None, skala=None,
                          clip=None, stil=None):
         if isinstance(el, ZUSAMMENGESETZT):
@@ -5832,6 +5867,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                 # dashed viewport outline only in the model view
                 kinder = el.aufgeloest(umriss=(tf is None and tags == ("element",)
                                                and not self._ist_layout()))
+            elif isinstance(el, (ElektroMaske, Klemme, Kabel)) and self._aufgeraeumt():
+                kinder = self._ohne_vorlagewerte(el)
             else:
                 kinder = el.aufgeloest()
             for kind in kinder:
@@ -5845,6 +5882,9 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         tf = tf or self.mm_to_px
         sk = skala if skala is not None else self.view["zoom"]
         clip = clip or self._sicht_rect()
+        if (isinstance(el, Text) and self._aufgeraeumt()
+                and el.hoehe * sk < MIN_TEXT_PX):
+            return                       # too small to read: only a smudge on screen
         
         if stil:
             farbe, w, dash = stil["farbe"], stil["w"], stil.get("dash")
@@ -6003,9 +6043,14 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         if not self._ist_layout():
             farbe = stil["farbe"] if stil else self._effektive_zeichenfarbe(el)
             cx, cy = tf(el.x, el.y)
-            r = max(3.0, el.radius * sk)
+            if self._aufgeraeumt():
+                # true size; when zoomed out a small dot instead of a thick ring
+                r = max(1.5, el.radius * sk)
+                breite = 2 if r >= 3.0 else 1
+            else:
+                r, breite = max(3.0, el.radius * sk), 2
             self.canvas.create_oval(cx - r, cy - r, cx + r, cy + r,
-                                    outline=farbe, width=2, tags=tags)
+                                    outline=farbe, width=breite, tags=tags)
         t = el.text_element()
         if t is not None:
             self._zeichne_element(t, tags=tags, tf=tf, skala=skala,
@@ -10662,11 +10707,22 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             g["blatt"] = nr
         geraete_referenzen(eigene, nr, andere)
 
+    def _einst_speichern(self, schluessel, wert):
+        """Stores one setting in the configuration file."""
+        cfg = lade_konfiguration()
+        cfg[schluessel] = wert
+        speichere_konfiguration(cfg)
+
     def _einrasten(self, neue):
-        """Pins/junctions/terminals/devices placed on top interrupt the
-        wires they lie on."""
+        """Pin magnet (devices beside another pin snap onto its line), then
+        pins/junctions/terminals/devices placed on top interrupt the wires
+        they lie on."""
         if self._ist_layout() or not neue:
             return 0
+        if getattr(self, "pin_magnet_var", None) is not None and self.pin_magnet_var.get():
+            dx, dy = pins_ausrichten(self._ziel_liste(), list(neue))
+            if dx or dy:
+                self.status.set(tr("msg.pin_magnet", dx=dx, dy=dy))
         zoom = self.view["zoom"] if self.view["zoom"] else 1.0
         tol = min(1.0, max(0.2, 3.0 / zoom))
         n = leitungen_einrasten(self._ziel_liste(), list(neue), tol)
