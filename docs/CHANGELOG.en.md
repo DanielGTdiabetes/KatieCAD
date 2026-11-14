@@ -1,6 +1,7 @@
 # Changes
 
 ## Unreleased
+- New: **Line types in the DXF/DWG export:** dashed, dash-dot, dash-double-dot and dotted lines (wires too) are written as line types (`DASHED`, `CENTER`, `DIVIDE`, `DOT`; patterns in mm as in the PDF) in the model, layout and project export and in DWG. The KatieCAD import reads them back
 - New: **Line type of wires:** select wire(s) and pick a type in the toolbar *Line type* or in the properties window; it applies to the whole wire up to the next terminal or device pin. New types **Dotted** and **Dash-double-dot**. The line type (also width and colour) is kept when a device is moved and the automatic wire piece is rebuilt. With "by layer" the wire keeps its width. DXF import: PHANTOM/DIVIDE -> dash-double-dot, DOT -> dotted
 - Change: **Line types translated:** the drop-down lists show the names in the program language (e.g. "Continua (fina)" in Spanish); files keep the previous keys
 - New: **Pin magnet** (*Settings > Pin magnet*, on by default): a device or terminal that is inserted, pasted, copied or moved with a pin up to 1.5 mm beside the line of another object's pin is aligned exactly onto it, so the automatic wire appears. Objects moved together keep their positions to each other (one shift for all). 1.5 mm is less than half the pole pitch (5 mm), so a pole never jumps to the next one

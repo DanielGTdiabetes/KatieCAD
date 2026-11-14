@@ -61,6 +61,7 @@ from katiecad.model import geom2d as G2
 from katiecad.model import auswahl as AUSW
 from katiecad.electrical import nummerierung as NUM
 from katiecad.electrical import drahtnummern as DN
+from katiecad.fileio import dxf_linientypen as DLT
 from katiecad.model.geom2d import spline_punkte
 from katiecad.ui.sidebar import Seitenleiste
 from katiecad.ui.widgets import FlatButton, farb_swatch, Tooltip
@@ -6859,6 +6860,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         """Builds an ezdxf document from the current drawing."""
         wand_verknuepfen(self.elemente)
         doc = ezdxf.new(dxfversion="R2010")
+        # dashed, dash-dot, dotted ... wires and lines
+        self._dxf_lt_namen = DLT.definieren(doc)
         for name, l in self.layers.items():
             if name not in doc.layers:
                 doc.layers.add(name, color=self._hex_zu_aci(l.farbe))
@@ -6933,6 +6936,9 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
 
     def _element_zu_dxf(self, msp, el):
         attribs = {"layer": el.layer}
+        if not isinstance(el, (Text, ZUSAMMENGESETZT)):
+            attribs.update(DLT.attribute(getattr(el, "linientyp", None),
+                                         getattr(self, "_dxf_lt_namen", set())))
         try:
             if isinstance(el, Linie):
                 msp.add_line((el.x1, el.y1), (el.x2, el.y2), dxfattribs=attribs)

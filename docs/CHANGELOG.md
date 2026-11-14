@@ -1,6 +1,7 @@
 # Änderungen
 
 ## Unveröffentlicht
+- Neu: **Linientypen im DXF/DWG-Export:** Strich-, Strichpunkt-, Strich-Zweipunkt- und Punktlinien (auch Leitungen) werden als Linientyp geschrieben (`DASHED`, `CENTER`, `DIVIDE`, `DOT`; Muster in mm wie im PDF), im Export des Modellbereichs, des Layouts und des Projekts sowie im DWG. Der KatieCAD-Import erkennt sie wieder
 - Neu: **Linientyp von Leitungen:** Leitung(en) wählen und in der Werkzeugleiste *Linientyp* oder im Eigenschaften-Fenster einen Typ wählen; er gilt für den ganzen Draht bis zur nächsten Klemme oder zum nächsten Gerätepin. Neue Typen **Punktlinie** und **Strich-Zweipunktlinie**. Der Linientyp (auch Breite und Farbe) bleibt erhalten, wenn ein Gerät verschoben und das automatische Leitungsstück neu erzeugt wird. Bei „von Layer“ behält die Leitung ihre Breite. DXF-Import: PHANTOM/DIVIDE → Strich-Zweipunktlinie, DOT → Punktlinie
 - Änderung: **Linientypen übersetzt:** Die Auswahllisten zeigen die Namen in der Programmsprache (z. B. „Continua (fina)“); in den Dateien bleiben die bisherigen Schlüssel
 - Neu: **Pin-Magnet** (*Einstellungen › Pin-Magnet*, standardmäßig an): Liegt ein eingefügtes, kopiertes oder verschobenes Gerät bzw. eine Klemme mit einem Anschluss bis 1,5 mm neben der Linie eines Anschlusses eines anderen Objekts, wird es genau darauf ausgerichtet, sodass die automatische Leitung entsteht. Gemeinsam verschobene Objekte behalten ihre Lage zueinander (eine Verschiebung für alle). 1,5 mm ist weniger als der halbe Polabstand (5 mm), ein Pol springt also nie auf den nächsten

@@ -343,7 +343,8 @@ so placing them on the snap grid also lines them up.
 **Line type of a wire:** select a wire piece and pick a type in the toolbar (*Line type*) or in
 the properties window: continuous, dashed, dash-dot, dash-double-dot, dotted ... It is applied to
 the whole wire (up to the next terminal or device pin) and kept when you move a device and the
-wire piece is rebuilt.
+wire piece is rebuilt. The DXF/DWG export writes it as an AutoCAD line type (`DASHED`, `CENTER`,
+`DIVIDE`, `DOT`).
 
 **Hide empty fields and tiny details** (*Settings*, on by default): on screen only, fields that still
 hold their template value (TYP, PER, MAN) are hidden, texts too small to read are not drawn and
