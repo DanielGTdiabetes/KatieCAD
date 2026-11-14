@@ -133,7 +133,65 @@ Petición: importar STEP y asignar un modelo 3D a cada equipo del esquema; el vi
    STEP generado con OCP (`BRepPrimAPI_MakeBox` + `STEPControl_Writer`) para no depender de
    archivos externos.
 
-### 4.3 Entorno de prueba usado
+### 4.3 Mecanizado del armario, canaleta y desplazamiento con offset
+
+Petición del usuario (taller): cortes cuadrados para ventiladores u otros elementos, taladros
+circulares para pulsadores, perforaciones para sujetar elementos; canaleta en la placa de
+montaje (la habitual: **Unex serie 77**) dibujada como una línea; menú de desplazamiento con
+offset en X, Y o Z.
+
+**Lo que ya existe (no rehacer):**
+
+- Cortes en cualquier cara: dibujar rectángulo / círculo / polilínea sobre la cara (puerta,
+  lateral, techo, placa) y cortarlo con el icono **«Agujero»** (profundidad 0 = pasante).
+  Modelo: `Koerper3D.ausschnitte` (`{"ebene", "profil", "tiefe", "rund"}`) y
+  `Koerper3D.loecher` (taladros verticales), métodos `ausschnitt_hinzufuegen` /
+  `loch_hinzufuegen`. En 2D los cortes no abiertos hacia arriba salen discontinuos.
+- Canaleta: herramienta `DUCT` (barra «Obra»), capa "CD"; en 3D crea un cuerpo con ancho y alto
+  sobre la cara bajo el ratón, punto a punto como una polilínea; `DUCTJOIN` crea empalme / codo /
+  T. Modelo: `Kabelkanal` (2D) y `Koerper3D.kanal = {"art": "gerade"|"verbinder"|"winkel"|"t",
+  "breite"}` (3D).
+- Desplazar exacto: arrastrar una flecha del manipulador 3D y teclear la distancia (un eje cada vez).
+
+**Lo que falta (diseño):**
+
+1. **Diálogo de mecanizado** (menú 3D > «Mecanizado…», sobre la cara elegida):
+   - Tipo: rectangular, circular, taladro de fijación, y **plantillas de serie** editables en
+     un JSON del programa/proyecto (como `report_templates/`): pulsador/piloto Ø22,5;
+     Ø16; prensaestopas M16/M20/M25/M32/M40/M50/M63 (taladro = métrica + holgura);
+     ventilador con rejilla (p. ej. 92×92, 125×125, 177×177, 223×223, 291×291 — comprobar con
+     el catálogo del fabricante usado); taladro de fijación M4 / M5 / M6 (roscar Ø3,3 / 4,2 / 5,0
+     o pasante Ø4,5 / 5,5 / 6,6).
+   - Posición **exacta respecto a una esquina o al centro de la cara** (X, Y en la cara) además del
+     clic; repetición en fila/matriz (n × paso) para filas de pulsadores o taladros.
+   - Reutiliza `ausschnitt_hinzufuegen` / `loch_hinzufuegen`; cada corte guarda además una
+     etiqueta (`"bez"`: "Ø22,5 pulsador", "Ventilador 125") para la lista.
+   - **Lista de mecanizados** (informe y Excel): pieza (puerta, lateral izq., placa…), cara,
+     tipo, medida, X/Y desde la esquina de referencia, cantidad — para el taller o una CNC
+     (más adelante, exportar DXF plano por cara para la CNC).
+   - Limitación actual a revisar: los cuerpos con cortes no se pueden estirar (STRETCH).
+2. **Canaleta como «línea» (estilo EPLAN)** sobre la placa de montaje:
+   - Clic en el punto inicial; la canaleta **se estira con el ratón hasta un máximo de 2000 mm**
+     (longitud de barra) o se para antes con un segundo clic o tecleando la longitud; si se sigue,
+     empieza otra barra (cada barra = un tramo, para la lista de materiales y el corte).
+   - Medidas **ancho × alto** de una lista de catálogo editable (Unex serie 77, canal ranurado;
+     las medidas exactas deben tomarse del catálogo Unex) más «libre».
+   - Por defecto sobre la cara delantera de la placa (plano y = cte, como la colocación de
+     equipos) y orientación horizontal/vertical con ORTHO.
+   - Para la lista de materiales: referencia, medida, longitud por tramo y total (metros de
+     canaleta y número de barras de 2 m). Tapa incluida o aparte (opción).
+   - Partir de la herramienta `DUCT` existente: añadir tope de longitud, catálogo y datos de
+     artículo al `Koerper3D.kanal` (p. ej. `"ref"`, `"hoehe"`, `"laenge"`).
+3. **Menú «Desplazar con offset…»** (menú Editar y clic derecho en 3D, también en 2D):
+   diálogo con **ΔX, ΔY, ΔZ** a la vez (y opción «copiar» con número de copias), aplicado a la
+   selección con un único paso de deshacer. Reutiliza `verschieben(dx, dy, dz)` de los cuerpos
+   (en 2D, ΔZ desactivado).
+
+Orden propuesto: 3 (pequeño, útil ya) → 2 (canaleta) → 1 (mecanizado + lista) → STEP y
+colocación de equipos (4.1–4.2), porque la colocación y la canaleta comparten el plano de
+la placa de montaje.
+
+### 4.4 Entorno de prueba usado
 
 En la sesión se creó un entorno aislado temporal con `ezdxf 1.4.5`, `ezdwg`, `cadquery-ocp-novtk
 8.0.1.1` y Pillow (comprobado: `from OCP.STEPControl import STEPControl_Reader` funciona). Está en
