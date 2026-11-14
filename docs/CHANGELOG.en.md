@@ -1,6 +1,8 @@
 # Changes
 
 ## Unreleased
+- New: **Markers for label printers (Weidmüller M-Print PRO)** (*Project > Export markers for M-Print PRO...*): lists wires (one marker per wire end, also at branches; only numbered wires), terminals (per strip in mounting order, `-X1:1`, `-X1:2` ...) and devices. Excel with one sheet per list or CSV with one file per list; one marker per row, text in column A, no merged cells, header row optional. Text per list with placeholders (`{nr}`, `{hier}`, `{ziel}`; `{leiste}`, `{num}`, `{ort}`; `{ind}`) and the maximum number of characters of the marker: longer texts are reported after the export. CSV texts are written unchanged (for M-Print, not for opening in Excel). Settings are saved in the project
+- New: **Wire number in the connection list** (column *Wire*, dropped without wire numbers)
 - Change: **Wire numbers without a dot:** the default format is now `{sheet}{n:02}` with the counter from 0, so sheet 10 starts with 1000, 1001 ... New setting *First number per sheet*. Projects with a saved format keep counting from 1
 - New: **Wire number on every branch:** at a junction (T) every branch gets a label with the same number (can be switched off in the dialog). Corners join pieces into one branch; three or more pieces at one point or the arms of a junction symbol separate branches
 - New: **Line types in the DXF/DWG export:** dashed, dash-dot, dash-double-dot and dotted lines (wires too) are written as line types (`DASHED`, `CENTER`, `DIVIDE`, `DOT`; patterns in mm as in the PDF) in the model, layout and project export and in DWG. The KatieCAD import reads them back

@@ -128,7 +128,8 @@ _STANDARD = {
               ("typ", "rep.col.typ", 26, "l"),
               ("ader", "rep.col.ader", 10, "l"), ("von", "rep.col.von", 50, "l"),
               ("nach", "rep.col.nach", 50, "l"), ("ort", "rep.col.ort", 18, "l")],
-    "verbindungen": [("pos", "rep.col.pos", 6, "r"), ("von", "rep.col.vl_von", 50, "l"),
+    "verbindungen": [("pos", "rep.col.pos", 6, "r"), ("draht", "rep.col.draht", 12, "l"),
+                     ("von", "rep.col.vl_von", 50, "l"),
                      ("nach", "rep.col.vl_nach", 50, "l"),
                      ("kabel", "rep.col.kabelader", 24, "l"),
                      ("ort", "rep.col.ort", 18, "l"),
@@ -355,7 +356,7 @@ def netz_aufbauen(blaetter):
     return Netz.aufbauen(blaetter)
 
 
-_OPTIONAL = {"einbauort", "funktion"} | {
+_OPTIONAL = {"einbauort", "funktion", "draht"} | {
     p + "_" + k for p in D.SEITEN for k in ("draht", "kabel", "farbe", "querschnitt",
                                              "leiter")}
 

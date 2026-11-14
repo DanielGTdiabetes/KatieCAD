@@ -2730,6 +2730,79 @@ class ListenAuswahlDialog(tk.Toplevel):
         self.destroy()
 
 
+class MPrintDialog(tk.Toplevel):
+    """Marker export for label printers (Weidmüller M-Print PRO).
+    einst: settings (reports.mprint.einstellungen), anzahl: {kind: number of markers}.
+    result: settings dict of the same shape, or None."""
+    ARTEN = ("hilos", "bornes", "equipos")
+
+    def __init__(self, parent, einst, anzahl):
+        super().__init__(parent)
+        self.result = None
+        self.title(tr("dlg.mp.titel"))
+        self.transient(parent)
+        _modal(self)
+        self.configure(bg=FARBEN["bg_mittel"])
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=tr("dlg.mp.titel"), style="Title.TLabel").grid(
+            row=0, column=0, columnspan=4, sticky=tk.W)
+        for c, t in ((1, "dlg.mp.format"), (2, "dlg.mp.max")):
+            ttk.Label(f, text=tr(t)).grid(row=1, column=c, sticky=tk.W, padx=(6, 0), pady=(8, 2))
+        self._v = {}
+        for i, art in enumerate(self.ARTEN, start=2):
+            e = einst[art]
+            akt = tk.BooleanVar(value=bool(e["aktiv"]))
+            fmt = tk.StringVar(value=str(e["format"]))
+            mx = tk.StringVar(value=str(e["max"]))
+            ttk.Checkbutton(f, text="%s  (%d)" % (tr("mp." + art), anzahl.get(art, 0)),
+                            variable=akt).grid(row=i, column=0, sticky=tk.W, pady=2)
+            ttk.Entry(f, textvariable=fmt, width=18).grid(row=i, column=1, sticky=tk.W,
+                                                          padx=(6, 0), pady=2)
+            ttk.Spinbox(f, from_=0, to=99, textvariable=mx, width=5).grid(
+                row=i, column=2, sticky=tk.W, padx=(6, 0), pady=2)
+            ttk.Label(f, text=tr("dlg.mp.hilfe." + art), style="Hint.TLabel").grid(
+                row=i, column=3, sticky=tk.W, padx=(8, 0))
+            self._v[art] = (akt, fmt, mx)
+        self._csv = tk.BooleanVar(value=bool(einst.get("csv")))
+        af = ttk.Frame(f)
+        af.grid(row=6, column=0, columnspan=4, sticky=tk.W, pady=(10, 0))
+        ttk.Radiobutton(af, text=tr("dlg.mp.excel"), variable=self._csv,
+                        value=False).pack(side=tk.LEFT, padx=(0, 14))
+        ttk.Radiobutton(af, text=tr("dlg.mp.csv"), variable=self._csv,
+                        value=True).pack(side=tk.LEFT)
+        self._kopf = tk.BooleanVar(value=bool(einst.get("kopf")))
+        ttk.Checkbutton(f, text=tr("dlg.mp.kopf"), variable=self._kopf).grid(
+            row=7, column=0, columnspan=4, sticky=tk.W, pady=(6, 0))
+        ttk.Label(f, text=tr("dlg.mp.hinweis"), style="Hint.TLabel", wraplength=460,
+                  justify=tk.LEFT).grid(row=8, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
+        bf = ttk.Frame(f)
+        bf.grid(row=9, column=0, columnspan=4, pady=(12, 0))
+        ttk.Button(bf, text=tr("dlg.mp.exportieren"), command=self._ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
+        self.bind("<Escape>", lambda e: self.destroy())
+        _zentrieren(self, parent)
+        self.wait_window(self)
+
+    def _ok(self):
+        self.result = mprint_ergebnis(
+            self._csv.get(), self._kopf.get(),
+            {art: (akt.get(), fmt.get(), mx.get()) for art, (akt, fmt, mx) in self._v.items()})
+        self.destroy()
+
+
+def mprint_ergebnis(csv, kopf, felder):
+    """Settings dict of the M-Print dialog: felder = {kind: (active, format, max text)}."""
+    out = {"csv": bool(csv), "kopf": bool(kopf)}
+    for art, (akt, fmt, mx) in felder.items():
+        try:
+            m = max(0, int(str(mx).strip()))
+        except ValueError:
+            m = 0
+        out[art] = {"aktiv": bool(akt), "format": str(fmt).strip(), "max": m}
+    return out
+
+
 class DrahtnummernDialog(tk.Toplevel):
     """Options of the wire numbering. vorgabe: settings dict (see
     electrical.drahtnummern.STANDARD). mehrere_blaetter: offer "whole project".

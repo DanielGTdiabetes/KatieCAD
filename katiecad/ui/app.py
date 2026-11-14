@@ -104,7 +104,7 @@ from katiecad.ui.dialogs import (
     MasstextDialog, WandDialog, KanalDialog, OeffnungDialog, RaumDialog, BauteilkatalogDialog, SchnellauswahlDialog, SuchenErsetzenDialog, QuerverweisDialog, PruefungDialog, EigenschaftenPalette, VerbindungspunkteDialog, ProjektDruckDialog,
     VerbindungspunktDialog, VerbindungDialog, FestMaskeDialog,
     KoordinatenfeldDialog,
-    TitleBlockDialog, DokumentationDialog, ListenAuswahlDialog, SchriftenDialog, ProjektEigenschaftenDialog,
+    TitleBlockDialog, DokumentationDialog, ListenAuswahlDialog, MPrintDialog, SchriftenDialog, ProjektEigenschaftenDialog,
 )
 from katiecad.reports import seiten as SEI, anwenden as ANW
 from katiecad.fileio.pdf import pdf_erzeugen, pdf_senden, pdf_mehrseitig_erzeugen
@@ -1205,6 +1205,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                               command=self.dokumentation_csv)
         m_projekt.add_command(label=tr("menu.projekt.doku_excel"),
                               command=self.dokumentation_excel)
+        m_projekt.add_command(label=tr("menu.projekt.mprint"),
+                              command=self.etiketten_mprint)
         m_projekt.add_separator()
         m_projekt.add_command(label=tr("menu.projekt.loeschen"),
                               command=self.projekt_loeschen)
@@ -11786,6 +11788,77 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         speichere_konfiguration(cfg)
         self.redraw()
         self.status.set(tr("msg.schriften_gesetzt", n=len(SCHRIFTEN.aktive_namen())))
+
+    def etiketten_mprint(self):
+        """Markers for the label printer (Weidmüller M-Print PRO): wires (one per
+        end), terminals in mounting order and devices as Excel (one sheet per list)
+        or CSV; texts longer than the marker are reported."""
+        from katiecad.reports import mprint as MP
+        p = self.projekt
+        if p is None:
+            self.status.set(tr("msg.projekt.kein_projekt"))
+            return
+        if not self._blatt_sichern():
+            return
+        infos, indizes = self._zeichnungsblaetter_einlesen()
+        if infos is None:
+            return
+        blaetter = [(k, b.elemente) for k, b in enumerate(infos)]
+        einbauorte = {k: b.einbauort for k, b in enumerate(infos)}
+
+        def nummer(k):
+            return indizes[k] + 1
+        try:
+            netz = SEI.netz_aufbauen(blaetter)
+            einst = MP.einstellungen(p.doku)
+            alle = dict(einst, **{a: dict(einst[a], aktiv=True) for a in MP.ARTEN})
+            anzahl = {a: len(z) for a, z in
+                      MP.listen(netz, blaetter, nummer, einbauorte, alle).items()}
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror(tr("dlg.mp.titel"), tr("msg.doku.fehler",
+                                 fehler=f"{type(e).__name__}: {e}"), parent=self.root)
+            return
+        dlg = MPrintDialog(self.root, einst, anzahl)
+        if dlg.result is None:
+            return
+        einst = MP.einstellungen({"mprint": dlg.result})
+        p.doku = {**p.doku, "mprint": dlg.result}
+        p.speichern()
+        listen = {a: z for a, z in MP.listen(netz, blaetter, nummer, einbauorte, einst).items()
+                  if z}
+        if not listen:
+            self.status.set(tr("msg.mp.leer"))
+            return
+        namen = {a: tr("mp." + a) for a in MP.ARTEN}
+        if einst["csv"]:
+            ziel = filedialog.askdirectory(parent=self.root, initialdir=p.ordner,
+                                           title=tr("dlg.mp.titel"))
+        else:
+            ziel = filedialog.asksaveasfilename(
+                parent=self.root, initialdir=p.ordner, initialfile=p.name + "_M-Print.xlsx",
+                defaultextension=".xlsx", filetypes=[("Excel", "*.xlsx")],
+                title=tr("dlg.mp.titel"))
+        if not ziel:
+            return
+        try:
+            geschrieben = MP.exportieren(ziel, listen, namen, einst["csv"], einst["kopf"])
+        except OSError as e:
+            messagebox.showerror(tr("dlg.mp.titel"), tr("msg.doku.fehler", fehler=e),
+                                 parent=self.root)
+            return
+        n = sum(len(z) for z in listen.values())
+        self.status.set(tr("msg.mp.fertig", n=n, teile=len(geschrieben), ziel=ziel))
+        lang = MP.zu_lang(listen, einst)
+        if lang:
+            zeilen = [tr("msg.mp.zeile", liste=namen[a], text=t, n=l, max=m)
+                      for a, t, l, m in lang[:15]]
+            if len(lang) > 15:
+                zeilen.append("...")
+            messagebox.showwarning(tr("dlg.mp.titel"),
+                                   tr("msg.mp.zu_lang", n=len(lang)) + "\n\n" + "\n".join(zeilen),
+                                   parent=self.root)
 
     def dokumentation_excel(self):
         """Lists (device list, terminal diagram, cable plan, parts list ...) as ONE Excel

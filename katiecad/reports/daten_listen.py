@@ -42,7 +42,7 @@ def _lauf_ziele(netz, n, kante):
 def verbindungsliste(netz, blaetter, nummer, einbauorte=None):
     """One row per point-to-point connection (pin/terminal to pin/terminal/
     potential). Nets with more than two end points are listed as a chain.
-    Rows: pos, von, nach, kabel, ort, einbauort."""
+    Rows: pos, draht (wire number), von, nach, kabel, ort, einbauort."""
     felder = _felder(blaetter)
     gesehen = set()
     paare = []
@@ -67,7 +67,8 @@ def verbindungsliste(netz, blaetter, nummer, einbauorte=None):
     zeilen = []
     for a, b, v in paare:
         kabel = " ".join(f"{c}/{ad}" if c else ad for c, ad in v)
-        zeilen.append({"von": knoten_text(a), "nach": knoten_text(b),
+        zeilen.append({"draht": a.draht or b.draht,
+                       "von": knoten_text(a), "nach": knoten_text(b),
                        "kabel": kabel, "ort": _knoten_ort(felder, nummer, a),
                        "einbauort": _eo(einbauorte, a.blatt)})
     zeilen.sort(key=lambda r: (natuerlich(r["einbauort"]), natuerlich(r["von"]),

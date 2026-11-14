@@ -501,6 +501,18 @@ Press **F2**, double-click a sheet or right-click > *Sheet properties…* to set
 
 Dimensions: **Insert > Dimension > Radius dimension (DR)** and **Diameter dimension (DD)** - click a circle or arc, then the text position.
 
+## Markers for the label printer (M-Print PRO)
+*Project > Export markers for M-Print PRO...* writes the markers for Weidmüller M-Print PRO (or any
+label software that imports Excel/CSV): one marker per row, text in column A, no merged cells.
+
+- **Wires:** one marker per wire end (a T with three ends gives three markers). Only wires with a
+  wire number appear - number the wires first. Text: `{nr}` (number), `{hier}` (this end, e.g.
+  `-K1:13`), `{ziel}` (the other end(s)).
+- **Terminals:** per terminal strip in mounting order, default `{leiste}:{num}` -> `-X1:1`.
+- **Devices:** one marker per identifier, `{ind}` -> `-K1`.
+- **Max. characters:** the length the marker can hold; longer texts are listed after the export.
+- **Excel** (one workbook, one sheet per list) or **CSV** (one file per list), header row optional.
+
 ## Terminal diagram: internal and external side
 Column order: terminal strip, location, manufacturer, type, **external: cable, conductor, wire, target**, terminal (NUM), bridge, **internal: target, wire, conductor, cable**, sheet/column/row, function. Columns without any value disappear.
 
