@@ -191,7 +191,59 @@ Orden propuesto: 3 (pequeño, útil ya) → 2 (canaleta) → 1 (mecanizado + lis
 colocación de equipos (4.1–4.2), porque la colocación y la canaleta comparten el plano de
 la placa de montaje.
 
-### 4.4 Entorno de prueba usado
+### 4.4 Alternativa: conector con SolidCraft en lugar de ampliar el 3D propio
+
+Idea del usuario: prescindir del 3D de KatieCAD y conectar con **SolidCraft**
+(<https://github.com/tangency-labs/solidcraft>, <https://solidcraft.io>).
+
+Comprobado en su README y documentación (noviembre de 2026):
+
+- CAD 3D **paramétrico de código abierto en Rust**, licencia **Apache-2.0** (compatible: serían
+  dos programas separados que se pasan archivos, sin mezclar código con KatieCAD, BSD-3).
+- Escritorio (instalador Windows), navegador, **CLI sin pantalla** y **servidor MCP**.
+- **STEP nativo** (AP203/AP214/AP242, ensamblajes, nombres, colores) de entrada y salida; también
+  IGES, STL, OBJ, 3MF, glTF.
+- Taladros, patrones, ensamblajes, **chapa con desarrollo plano y exportación DXF** (útil para el
+  mecanizado de puertas y laterales en CNC).
+- Automatización: un **script JSON** con los mismos comandos de la interfaz, ejecutado con
+  `solidcraft-cli run script.json --out cuadro.step` (o `--save` a `.sc`). Comandos vistos:
+  `file.insert_step {"path"}`, `solid.box {"length","width","height","corner","body_name"}`,
+  `solid.move {"bodies", "matrix" | "translate"/"origin"/"axis"/"angle", "copy"}`,
+  `sketch.create`, `sketch.rectangle.two_point`, `solid.extrude`, `file.export`.
+  Lista completa: `solidcraft-cli commands` y `docs/features.md` de su repositorio.
+- Está en beta (0.x): los comandos pueden cambiar entre versiones → fijar versión y comprobar con
+  `solidcraft-cli commands` en un test de integración opcional.
+
+**Diseño del conector (propuesta):**
+
+1. KatieCAD sigue siendo el maestro de los datos eléctricos (equipos con IND, TYP, referencia,
+   ruta del STEP del fabricante, posición en placa, canaletas, mecanizados).
+2. Exportación «Proyecto > Exportar montaje para SolidCraft…» → `montaje.json` (script):
+   - armario: `file.insert_step` del STEP del fabricante, o cajas `solid.box` con las medidas;
+   - cada equipo: `file.insert_step` de su STEP + `solid.move` con la matriz de posición sobre la
+     placa, `body_name` = IND (`-K1`);
+   - canaletas: `solid.box` por tramo (ancho × alto × longitud ≤ 2000) con nombre de artículo;
+   - mecanizados: boceto en la cara + corte (pendiente de ver los comandos exactos de corte /
+     taladro en `features.md`).
+   Luego `solidcraft-cli run --script-relative montaje.json --save cuadro.sc --out cuadro.step`,
+   o abrir el resultado en SolidCraft.
+3. ¿Dónde se decide la posición de cada equipo? Dos opciones a decidir con el usuario:
+   - **a)** en KatieCAD, con un **esquema de montaje 2D** de la placa (vista frontal, rectángulos
+     con el tamaño del equipo; estilo «panel layout» 2D de EPLAN), y SolidCraft solo construye el 3D;
+   - **b)** en SolidCraft (su interfaz 3D es mejor) y KatieCAD solo envía la lista de piezas; para
+     las listas (mecanizado, canaleta) habría que leer de vuelta las posiciones (formato `.sc` o
+     el STEP exportado con nombres de cuerpo).
+   Recomendación: **a)**, porque mantiene los datos del cuadro en KatieCAD y no depende de leer el
+   formato interno de SolidCraft.
+4. Ventajas: KatieCAD no necesita OCP ni mallas; STEP y chapa reales; KatieCAD más ligero.
+   Inconvenientes: dos programas; SolidCraft en beta; el armario 3D de KatieCAD (vistas en
+   presentaciones) quedaría para vistas sencillas o se sustituiría por vistas exportadas.
+
+Decisión pendiente del usuario: 3D propio (4.1–4.3) o conector SolidCraft (4.4). Las partes 4.3.1
+(lista de mecanizados), 4.3.2 (datos de canaleta) y 4.3.3 (desplazar con offset) sirven en
+ambos casos.
+
+### 4.5 Entorno de prueba usado
 
 En la sesión se creó un entorno aislado temporal con `ezdxf 1.4.5`, `ezdwg`, `cadquery-ocp-novtk
 8.0.1.1` y Pillow (comprobado: `from OCP.STEPControl import STEPControl_Reader` funciona). Está en
