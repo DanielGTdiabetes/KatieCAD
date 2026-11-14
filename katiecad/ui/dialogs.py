@@ -2747,34 +2747,41 @@ class DrahtnummernDialog(tk.Toplevel):
         ttk.Label(f, text=tr("dlg.draht.titel"), style="Title.TLabel").grid(
             row=0, column=0, columnspan=2, sticky=tk.W)
         ttk.Label(f, text=tr("dlg.draht.format")).grid(row=1, column=0, sticky=tk.W, pady=(8, 0))
-        self._fmt = tk.StringVar(value=str(vorgabe.get("format") or "{sheet}.{n}"))
+        self._fmt = tk.StringVar(value=str(vorgabe.get("format") or "{sheet}{n:02}"))
         ttk.Entry(f, textvariable=self._fmt, width=22).grid(row=1, column=1, sticky=tk.W,
                                                            padx=(6, 0), pady=(8, 0))
         ttk.Label(f, text=tr("dlg.draht.format_hilfe"), style="Hint.TLabel",
                   wraplength=340, justify=tk.LEFT).grid(row=2, column=0, columnspan=2, sticky=tk.W)
-        ttk.Label(f, text=tr("dlg.draht.hoehe")).grid(row=3, column=0, sticky=tk.W, pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.draht.start")).grid(row=3, column=0, sticky=tk.W, pady=(8, 0))
+        self._start = tk.StringVar(value=str(vorgabe.get("start", 0)))
+        ttk.Spinbox(f, from_=0, to=999, textvariable=self._start, width=6).grid(
+            row=3, column=1, sticky=tk.W, padx=(6, 0), pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.draht.hoehe")).grid(row=4, column=0, sticky=tk.W, pady=(8, 0))
         self._hoehe = tk.StringVar(value=str(vorgabe.get("hoehe", 2.5)))
-        ttk.Entry(f, textvariable=self._hoehe, width=8).grid(row=3, column=1, sticky=tk.W,
+        ttk.Entry(f, textvariable=self._hoehe, width=8).grid(row=4, column=1, sticky=tk.W,
                                                             padx=(6, 0), pady=(8, 0))
         self._sps = tk.BooleanVar(value=bool(vorgabe.get("sps", True)))
         ttk.Checkbutton(f, text=tr("dlg.draht.sps"), variable=self._sps).grid(
-            row=4, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+            row=5, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
         self._pot = tk.BooleanVar(value=bool(vorgabe.get("potenzial", False)))
         ttk.Checkbutton(f, text=tr("dlg.draht.potenzial"), variable=self._pot).grid(
-            row=5, column=0, columnspan=2, sticky=tk.W)
+            row=6, column=0, columnspan=2, sticky=tk.W)
+        self._ast = tk.BooleanVar(value=bool(vorgabe.get("je_ast", True)))
+        ttk.Checkbutton(f, text=tr("dlg.draht.je_ast"), variable=self._ast).grid(
+            row=12, column=0, columnspan=2, sticky=tk.W, pady=(6, 0))
         self._neu = tk.BooleanVar(value=False)
         ttk.Radiobutton(f, text=tr("dlg.draht.nur_neue"), variable=self._neu,
-                        value=False).grid(row=6, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+                        value=False).grid(row=7, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
         ttk.Radiobutton(f, text=tr("dlg.draht.alle_neu"), variable=self._neu,
-                        value=True).grid(row=7, column=0, columnspan=2, sticky=tk.W)
+                        value=True).grid(row=8, column=0, columnspan=2, sticky=tk.W)
         self._projekt = tk.BooleanVar(value=True)
         if mehrere_blaetter:
             ttk.Checkbutton(f, text=tr("dlg.draht.projekt"), variable=self._projekt).grid(
-                row=8, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+                row=9, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
         ttk.Label(f, text=tr("dlg.draht.hinweis"), style="Hint.TLabel", wraplength=340,
-                  justify=tk.LEFT).grid(row=9, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+                  justify=tk.LEFT).grid(row=10, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
         bf = ttk.Frame(f)
-        bf.grid(row=10, column=0, columnspan=2, pady=(12, 0))
+        bf.grid(row=13, column=0, columnspan=2, pady=(12, 0))
         ttk.Button(bf, text=tr("dlg.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
         ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
         self.bind("<Return>", lambda e: self._ok())
@@ -2789,8 +2796,13 @@ class DrahtnummernDialog(tk.Toplevel):
         if hoehe <= 0:
             messagebox.showerror(tr("dlg.draht.titel"), tr("dlg.draht.hoehe_fehler"), parent=self)
             return
-        self.result = {"format": self._fmt.get().strip() or "{sheet}.{n}",
+        try:
+            start = max(0, int(self._start.get()))
+        except ValueError:
+            start = 0
+        self.result = {"format": self._fmt.get().strip() or "{sheet}{n:02}", "start": start,
                        "sps": self._sps.get(), "potenzial": self._pot.get(),
+                       "je_ast": self._ast.get(),
                        "hoehe": hoehe, "neu": self._neu.get(),
                        "projekt": self._projekt.get()}
         self.destroy()

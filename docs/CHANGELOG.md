@@ -1,6 +1,8 @@
 # Änderungen
 
 ## Unveröffentlicht
+- Änderung: **Drahtnummern ohne Punkt:** Vorgabeformat jetzt `{sheet}{n:02}` mit Zähler ab 0, d. h. Blatt 10 beginnt mit 1000, 1001 … Neue Einstellung *Erste Nummer je Blatt*. Projekte mit gespeichertem Format zählen wie bisher ab 1
+- Neu: **Drahtnummer an jedem Ast:** Bei einer Abzweigung (T) bekommt jeder Ast ein Etikett mit derselben Nummer (abschaltbar im Dialog). Ecken verbinden Stücke zu einem Ast, drei oder mehr Stücke an einem Punkt oder die Arme eines Verbindungssymbols trennen Äste
 - Neu: **Linientypen im DXF/DWG-Export:** Strich-, Strichpunkt-, Strich-Zweipunkt- und Punktlinien (auch Leitungen) werden als Linientyp geschrieben (`DASHED`, `CENTER`, `DIVIDE`, `DOT`; Muster in mm wie im PDF), im Export des Modellbereichs, des Layouts und des Projekts sowie im DWG. Der KatieCAD-Import erkennt sie wieder
 - Neu: **Linientyp von Leitungen:** Leitung(en) wählen und in der Werkzeugleiste *Linientyp* oder im Eigenschaften-Fenster einen Typ wählen; er gilt für den ganzen Draht bis zur nächsten Klemme oder zum nächsten Gerätepin. Neue Typen **Punktlinie** und **Strich-Zweipunktlinie**. Der Linientyp (auch Breite und Farbe) bleibt erhalten, wenn ein Gerät verschoben und das automatische Leitungsstück neu erzeugt wird. Bei „von Layer“ behält die Leitung ihre Breite. DXF-Import: PHANTOM/DIVIDE → Strich-Zweipunktlinie, DOT → Punktlinie
 - Änderung: **Linientypen übersetzt:** Die Auswahllisten zeigen die Namen in der Programmsprache (z. B. „Continua (fina)“); in den Dateien bleiben die bisherigen Schlüssel

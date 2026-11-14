@@ -1,6 +1,8 @@
 # Changes
 
 ## Unreleased
+- Change: **Wire numbers without a dot:** the default format is now `{sheet}{n:02}` with the counter from 0, so sheet 10 starts with 1000, 1001 ... New setting *First number per sheet*. Projects with a saved format keep counting from 1
+- New: **Wire number on every branch:** at a junction (T) every branch gets a label with the same number (can be switched off in the dialog). Corners join pieces into one branch; three or more pieces at one point or the arms of a junction symbol separate branches
 - New: **Line types in the DXF/DWG export:** dashed, dash-dot, dash-double-dot and dotted lines (wires too) are written as line types (`DASHED`, `CENTER`, `DIVIDE`, `DOT`; patterns in mm as in the PDF) in the model, layout and project export and in DWG. The KatieCAD import reads them back
 - New: **Line type of wires:** select wire(s) and pick a type in the toolbar *Line type* or in the properties window; it applies to the whole wire up to the next terminal or device pin. New types **Dotted** and **Dash-double-dot**. The line type (also width and colour) is kept when a device is moved and the automatic wire piece is rebuilt. With "by layer" the wire keeps its width. DXF import: PHANTOM/DIVIDE -> dash-double-dot, DOT -> dotted
 - Change: **Line types translated:** the drop-down lists show the names in the program language (e.g. "Continua (fina)" in Spanish); files keep the previous keys

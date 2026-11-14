@@ -21,8 +21,9 @@ Rules, the first that applies wins:
      Siemens style "I0.0" / "%IX0.0" on a DI module -> "DI0.00" / "DI0.0").
   4. Potential (optional): the wire reaches an unpaired cross reference
      (e.g. "L1", "24V") -> that text.
-  5. Format, default "{sheet}.{n}": sheet number + counter per sheet,
-     counted left to right, top to bottom.
+  5. Format, default "{sheet}{n:02}" with the counter starting at 0: sheet 10
+     gives 1000, 1001 ... (counted left to right, top to bottom). The counter
+     start is a setting ("start"); "{sheet}.{n}" with start 1 gives 10.1, 10.2 ...
 
 Placeholders of the format: {sheet} / {hoja}, {sheetname} / {nombre}, {n}
 (format specs allowed: "{sheet}-{n:02}").
@@ -34,8 +35,8 @@ from collections import defaultdict
 
 from katiecad.model.core import Leitung, Drahtnummer, BlockReferenz
 
-STANDARD = {"format": "{sheet}.{n}", "sps": True, "potenzial": False,
-            "hoehe": 2.5}
+STANDARD = {"format": "{sheet}{n:02}", "start": 0, "sps": True, "potenzial": False,
+            "hoehe": 2.5, "je_ast": True}
 LAGE_TOL = 0.3          # mm: label insertion point -> wire
 ARTEN_SPS = ("DI", "DO", "AI", "AO")
 
@@ -44,7 +45,14 @@ def einstellungen(doku):
     """Project settings merged over the defaults."""
     e = dict(STANDARD)
     if isinstance(doku, dict) and isinstance(doku.get("drahtnummern"), dict):
-        e.update({k: v for k, v in doku["drahtnummern"].items() if k in STANDARD})
+        gespeichert = doku["drahtnummern"]
+        e.update({k: v for k, v in gespeichert.items() if k in STANDARD})
+        if "format" in gespeichert and "start" not in gespeichert:
+            e["start"] = 1          # projects saved before "start" existed keep counting from 1
+    try:
+        e["start"] = max(0, int(e["start"]))
+    except (TypeError, ValueError):
+        e["start"] = STANDARD["start"]
     return e
 
 
@@ -90,6 +98,33 @@ def platzierung(l):
     mx, my = (l.x1 + l.x2) / 2.0, (l.y1 + l.y2) / 2.0
     senkrecht = abs(l.x2 - l.x1) < abs(l.y2 - l.y1)
     return mx, my, (90.0 if senkrecht else 0.0)
+
+
+def _pkt(x, y):
+    return (round(x, 2), round(y, 2))
+
+
+def aeste(leitungen):
+    """Branches of the pieces of ONE wire on ONE sheet: pieces joined only at
+    corners (exactly two pieces meet) form one branch; where three or more
+    pieces meet (a T without junction symbol) or at the arms of a junction
+    symbol (different points) a new branch starts.
+    -> [[Leitung]] (every branch of a wire carries its own label)."""
+    an = defaultdict(list)
+    for l in leitungen:
+        an[_pkt(l.x1, l.y1)].append(l)
+        an[_pkt(l.x2, l.y2)].append(l)
+    uf = _UF()
+    for l in leitungen:
+        uf.finde(id(l))
+    for stuecke in an.values():
+        if len(stuecke) == 2 and stuecke[0] is not stuecke[1]:
+            uf.vereinen(id(stuecke[0]), id(stuecke[1]))
+    gruppen = defaultdict(list)
+    for l in leitungen:
+        gruppen[uf.finde(id(l))].append(l)
+    return sorted(gruppen.values(), key=lambda g: min((min(l.x1, l.x2), -max(l.y1, l.y2))
+                                                     for l in g))
 
 
 # ------------------------------------------------------------------
@@ -316,7 +351,8 @@ def planen(blaetter, netz, sheet_nr=None, sheet_name=None, einstellung=None,
     # counter per sheet
     offen.sort(key=lambda d: (reihenfolge.get(d.blaetter()[0], 0),
                               _sortierschluessel(d, d.blaetter()[0])))
-    zaehler = defaultdict(int)
+    start = int(e.get("start", STANDARD["start"]) or 0)
+    zaehler = defaultdict(lambda: start - 1)
     for d in offen:
         b = d.blaetter()[0]
         while True:
@@ -327,26 +363,34 @@ def planen(blaetter, netz, sheet_nr=None, sheet_name=None, einstellung=None,
         d.nummer = t
         vergeben.add(t)
 
-    # labels: one per wire and sheet
+    # labels: one per branch (je_ast) or one per wire and sheet
+    je_ast = bool(e.get("je_ast", STANDARD["je_ast"]))
     for d in ds:
-        pro_blatt = defaultdict(list)
-        for b, lab in d.labels:
-            pro_blatt[b].append(lab)
         for b in d.blaetter():
-            labs = pro_blatt.get(b, [])
-            auto = [lab for lab in labs if not lab.manuell]
-            hat_manuell = any(lab.manuell for lab in labs)
-            if auto:
-                behalten = [] if hat_manuell else auto[:1]
-                for lab in behalten:
-                    if lab.inhalt != d.nummer or lab.auto_text != d.nummer:
-                        plan.text.append((lab, d.nummer))
-                plan.weg[b].extend(auto[len(behalten):])
-            elif not hat_manuell:
-                l = max((l for bb, l in d.leitungen if bb == b), key=_laenge)
-                x, y, w = platzierung(l)
-                plan.neu[b].append(Drahtnummer(x, y, d.nummer, hoehe=hoehe,
-                                               winkel=w, auto_text=d.nummer))
+            stuecke = [l for bb, l in d.leitungen if bb == b]
+            gruppen = aeste(stuecke) if je_ast else [stuecke]
+            zu_gruppe = {id(l): i for i, g in enumerate(gruppen) for l in g}
+            labs_je = defaultdict(list)
+            for bb, lab in d.labels:
+                if bb == b:
+                    # label -> branch of the piece it lies on
+                    l = leitung_unter(stuecke, lab.x, lab.y)
+                    labs_je[zu_gruppe.get(id(l), 0)].append(lab)
+            for i, g in enumerate(gruppen):
+                labs = labs_je.get(i, [])
+                auto = [lab for lab in labs if not lab.manuell]
+                hat_manuell = any(lab.manuell for lab in labs)
+                if auto:
+                    behalten = [] if hat_manuell else auto[:1]
+                    for lab in behalten:
+                        if lab.inhalt != d.nummer or lab.auto_text != d.nummer:
+                            plan.text.append((lab, d.nummer))
+                    plan.weg[b].extend(auto[len(behalten):])
+                elif not hat_manuell:
+                    l = max(g, key=_laenge)
+                    x, y, w = platzierung(l)
+                    plan.neu[b].append(Drahtnummer(x, y, d.nummer, hoehe=hoehe,
+                                                   winkel=w, auto_text=d.nummer))
     return plan
 
 

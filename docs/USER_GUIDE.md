@@ -357,7 +357,9 @@ longest piece of the wire on each sheet (a text you can move along the wire, edi
 Rules: a number typed or changed by hand is kept; a wire at a PLC channel gets its address with
 the module type as prefix (`DI0.00`, `DO1.07`; `I0.0` becomes `DI0.0`); optionally a wire at a
 potential cross reference (`L1`, `24V`) gets its name; all others get the project format, default
-`{sheet}.{n}` (`3.1`, `3.2` ...). If you drag a number off its wire it no longer counts for the
+`{sheet}{n:02}` with the first number 0 (sheet 10: `1000`, `1001` ...); *First number per sheet*
+changes the start (`{sheet}.{n}` with 1 gives `10.1`, `10.2` ...). At a junction (T) every branch
+carries a label with the same number. If you drag a number off its wire it no longer counts for the
 wire; automatic numbers without a wire are removed on the next run.
 
 

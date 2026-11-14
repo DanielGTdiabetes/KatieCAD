@@ -45,7 +45,11 @@ def labels(el):
     return [e for e in el if isinstance(e, core.Drahtnummer)]
 
 
+ALT = {"format": "{sheet}.{n}"}       # format of the first tests (counter from 1)
+
+
 def nummerieren(blaetter, **kw):
+    kw.setdefault("einstellung", DN.einstellungen({"drahtnummern": ALT}))
     netz = N.Netz.aufbauen(blaetter)
     plan = DN.planen(blaetter, netz, **kw)
     for b, el in blaetter:
@@ -107,7 +111,7 @@ b += [L(0, -5, 0, -15), L(0, -15, 40, -15), L(40, -15, 40, -5)]
 e = DN.einstellungen({"drahtnummern": {"format": "W{sheet}-{n:02}"}})
 nummerieren([(4, b)], einstellung=e, sheet_nr=lambda k: k + 1)
 check([l.inhalt for l in labels(b)] == ["W5-01"], f"Format: {[l.inhalt for l in labels(b)]}")
-check(DN.format_text("{kaputt}", 2, "2", 3) == "2.3", "ungültiges Format -> Standard")
+check(DN.format_text("{kaputt}", 2, "2", 3) == "203", "ungültiges Format -> Standard")
 check(DN.format_text("{hoja}/{n}", 7, "7", 1) == "7/1", "spanische Platzhalter")
 
 # ---- PLC: wire to DI channel takes the address, also on the terminal side
@@ -121,7 +125,7 @@ nummerieren([(0, b)])
 txt = sorted(l.inhalt for l in labels(b))
 check(txt == ["1.1", "DI0.00", "DI0.01", "DI1.2"], f"SPS-Adressen: {txt}")
 b2 = [sps_di(0, 0, ["DI0.00"]), geraet(0, 40, "-S1"), L(0, 35, 0, 0)]
-nummerieren([(0, b2)], einstellung=DN.einstellungen({"drahtnummern": {"sps": False}}))
+nummerieren([(0, b2)], einstellung=DN.einstellungen({"drahtnummern": dict(ALT, sps=False)}))
 check([l.inhalt for l in labels(b2)] == ["1.1"], "SPS-Regel abschaltbar")
 
 # ---- cross references join the wire over two sheets; potential option
@@ -134,7 +138,7 @@ check([l.inhalt for l in labels(ba)] == ["1.1"] and [l.inhalt for l in labels(bb
       "Querverweis: gleicher Draht, gleiche Nummer auf beiden Blättern")
 pl = core.Querverweis(0, -20, text="L1", art="abgehend", richtung=270)
 bp = [geraet(0, 0, "-F1"), pl, L(0, -5, *pl.basis_punkt())]
-nummerieren([(0, bp)], einstellung=DN.einstellungen({"drahtnummern": {"potenzial": True}}))
+nummerieren([(0, bp)], einstellung=DN.einstellungen({"drahtnummern": dict(ALT, potenzial=True)}))
 check([l.inhalt for l in labels(bp)] == ["L1"], "Potenzial-Regel")
 
 # ---- save / load
@@ -179,7 +183,7 @@ with tempfile.TemporaryDirectory() as tmp:
     for m in ("_blatt_druckkontext", "_zeichnungsblaetter_einlesen", "_andere_blaetter_daten"):
         setattr(fake, m, getattr(A.CadApp, m).__get__(fake))
     A.DrahtnummernDialog = lambda *a, **k: SimpleNamespace(result={
-        "format": "{hoja}-{n:02}", "sps": True, "potenzial": False, "hoehe": 3.0,
+        "format": "{hoja}-{n:02}", "start": 1, "sps": True, "potenzial": False, "hoehe": 3.0,
         "neu": False, "projekt": True})
     A.CadApp.drahtnummern_vergeben(fake)
     check([l.inhalt for l in labels(s1)] == ["1-01"], f"App: aktives Blatt {[l.inhalt for l in labels(s1)]}")
@@ -194,5 +198,36 @@ with tempfile.TemporaryDirectory() as tmp:
     check(sum(isinstance(e, core.Drahtnummer) for e in geladen) == 2, "App: Etiketten wieder ladbar")
     A.CadApp.drahtnummern_vergeben(fake)
     check("aktuell" in fake.meldung, f"App: zweiter Lauf: {fake.meldung}")
+
+# ---- workshop default: no dot, counter from 0 -> sheet 10 starts with 1000
+check(DN.STANDARD["format"] == "{sheet}{n:02}" and DN.einstellungen({})["start"] == 0,
+      "Standard {sheet}{n:02} ab 0")
+b10 = [geraet(0, 0, "-K1"), geraet(0, -40, "-K2"), geraet(20, 0, "-K3"), geraet(20, -40, "-K4"),
+       L(0, -5, 0, -35), L(20, -5, 20, -35)]
+nummerieren([(9, b10)], einstellung=DN.einstellungen({}), sheet_nr=lambda k: k + 1)
+check(sorted(l.inhalt for l in labels(b10)) == ["1000", "1001"], f"Blatt 10: {[l.inhalt for l in labels(b10)]}")
+check(DN.einstellungen({"drahtnummern": {"format": "{sheet}.{n}"}})["start"] == 1,
+      "altes Projekt ohne 'start' zählt weiter ab 1")
+check(DN.einstellungen({"drahtnummern": {"start": "x"}})["start"] == 0, "ungültiger Start -> 0")
+
+# ---- branches: a T (three pieces at one point) = three branches, one label each
+t = [geraet(0, 0, "-K1"), geraet(-20, -40, "-K2"), geraet(20, -40, "-K3"),
+     L(0, -5, 0, -20), L(-20, -20, 0, -20), L(0, -20, 20, -20),
+     L(-20, -20, -20, -35), L(20, -20, 20, -35)]
+ds_t = DN.draehte(N.Netz.aufbauen([(0, t)]))
+check(len(ds_t) == 1, "T: ein Draht")
+aeste_t = DN.aeste([l for _b, l in ds_t[0].leitungen])
+check(len(aeste_t) == 3, f"T: drei Äste (Ecken verbinden): {[len(a) for a in aeste_t]}")
+nummerieren([(0, t)])
+check([l.inhalt for l in labels(t)] == ["1.1"] * 3, f"T: gleiche Nummer an jedem Ast: {[l.inhalt for l in labels(t)]}")
+nummerieren([(0, t)])
+check(len(labels(t)) == 3, "T: zweiter Lauf ändert nichts")
+t2 = [e for e in t if not isinstance(e, core.Drahtnummer)]
+nummerieren([(0, t2)], einstellung=DN.einstellungen({"drahtnummern": dict(ALT, je_ast=False)}))
+check(len(labels(t2)) == 1, "je_ast aus: ein Etikett je Draht und Blatt")
+t3 = [e for e in t if not isinstance(e, core.Drahtnummer)]
+t3.append(core.Drahtnummer(0, -12, "X9"))                  # manual on the stem
+nummerieren([(0, t3)])
+check(sorted(l.inhalt for l in labels(t3)) == ["X9", "X9", "X9"], "manuelle Nummer gilt für alle Äste")
 
 print(f"test_drahtnummern - OK ({ok} Pruefungen)")

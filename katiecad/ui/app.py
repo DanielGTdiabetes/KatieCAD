@@ -11592,7 +11592,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         if dlg.result is None:
             return
         r = dlg.result
-        einst = {k: r[k] for k in DN.STANDARD}
+        einst = {k: r.get(k, vorgabe[k]) for k in DN.STANDARD}
         if p is not None:
             p.doku["drahtnummern"] = einst
         else:
