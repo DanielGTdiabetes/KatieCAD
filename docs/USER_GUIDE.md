@@ -333,6 +333,17 @@ on the line with the number); then the field does not appear twice.
 
 ### Wires
 
+**Pin magnet:** wires appear automatically between two pins that lie exactly on one vertical or
+horizontal line. With *Settings > Pin magnet* (on by default) a device or terminal you insert,
+paste, copy or move is shifted by up to 1.5 mm so that its pins line up with the pins of the
+neighbouring objects; then the wire appears on its own. Objects moved together keep their
+positions to each other. Library symbols have their pins every 5 mm, like the default cursor snap,
+so placing them on the snap grid also lines them up.
+
+**Hide empty fields and tiny details** (*Settings*, on by default): on screen only, fields that still
+hold their template value (TYP, PER, MAN) are hidden, texts too small to read are not drawn and
+pins are small dots when zoomed out. Zoom in to see the pin numbers again.
+
 **Wire numbers:** *Project > Number wires...* (command `WIRENUM`) gives every wire one number.
 A wire is everything that is electrically joined up to the next terminal or device pin, also
 across junctions and cross references; a terminal starts a new wire. The number sits on the
