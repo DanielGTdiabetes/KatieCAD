@@ -34,7 +34,7 @@ import math
 import re
 from collections import defaultdict
 
-from katiecad.model.core import Leitung, Drahtnummer, BlockReferenz
+from katiecad.model.core import Leitung, Drahtnummer, BlockReferenz, ist_einpolig
 
 STANDARD = {"format": "{sheet}{n:02}", "start": 0, "sps": True, "potenzial": True,
             "hoehe": 2.5, "je_ast": True}
@@ -275,6 +275,18 @@ def potenzial(draht):
     return paar[0] if paar else ""
 
 
+def _einpolige_punkte(blaetter):
+    """{(sheet, point)} of the pins of single-pole devices (ignored by the net
+    unless 'evaluate single-pole too' is on)."""
+    from katiecad.electrical.logic import einrast_punkte
+    out = set()
+    for b, elemente in blaetter:
+        for el in elemente:
+            if ist_einpolig(el):
+                out.update((b, _pkt(x, y)) for x, y in einrast_punkte(el))
+    return out
+
+
 def _sortierschluessel(draht, blatt):
     """Left to right, top to bottom on the given sheet."""
     pts = [(min(l.x1, l.x2), -max(l.y1, l.y2)) for b, l in draht.leitungen if b == blatt]
@@ -335,6 +347,22 @@ def planen(blaetter, netz, sheet_nr=None, sheet_name=None, einstellung=None,
                 d.labels.append((b, lab))
             elif not lab.manuell:
                 plan.weg[b].append(lab)          # automatic label without wire
+
+    # wires of the single-pole representation (they touch a pin of a single-pole
+    # device) are no conductors of their own: no number, automatic labels go
+    einpolig = _einpolige_punkte(blaetter)
+    if einpolig:
+        bleiben = []
+        for d in ds:
+            if any((b, _pkt(l.x1, l.y1)) in einpolig or (b, _pkt(l.x2, l.y2)) in einpolig
+                   for b, l in d.leitungen):
+                for b, lab in d.labels:
+                    if not lab.manuell:
+                        plan.weg[b].append(lab)
+            else:
+                bleiben.append(d)
+        ds = bleiben
+        plan.draehte = ds
 
     # numbers that are fixed (manual, or kept)
     vergeben = set()

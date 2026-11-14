@@ -1,6 +1,8 @@
 # Changes
 
 ## Unreleased
+- New: **More single-pole symbols** (*12 Single-pole*): disconnector, switch disconnector, contactor main contact, energy meter (kWh), frequency converter, UPS, busbar (7 taps, from above or below), PV generator and PV inverter; pins on the 5 mm grid, pole count at the stroke. Made by `tools/make_symbols_einpolig_extra.py`
+- Fix: **wires of the one-line diagram** got wire numbers (and so markers) although single-pole devices are not evaluated. Now wires at a single-pole device get no number and old automatic numbers are removed - unless *Evaluate single-pole representation too* is on
 - Change: **Potential names as wire numbers:** a wire at a potential arrow (cross reference) carries its freely chosen name (`+24VDC`, `+24VDC1`, `L1`, `0V` ...), now by default and also when an arrow pair only continues the wire on another sheet. Saved project settings stay as they are
 - New: **Markers for label printers (Weidmüller M-Print PRO)** (*Project > Export markers for M-Print PRO...*): lists wires (one marker per wire end, also at branches; only numbered wires), terminals (per strip in mounting order, `-X1:1`, `-X1:2` ...) and devices. Excel with one sheet per list or CSV with one file per list; one marker per row, text in column A, no merged cells, header row optional. Text per list with placeholders (`{nr}`, `{hier}`, `{ziel}`; `{leiste}`, `{num}`, `{ort}`; `{ind}`) and the maximum number of characters of the marker: longer texts are reported after the export. CSV texts are written unchanged (for M-Print, not for opening in Excel). Settings are saved in the project
 - New: **Wire number in the connection list** (column *Wire*, dropped without wire numbers)
