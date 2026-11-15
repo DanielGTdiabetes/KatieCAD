@@ -233,8 +233,9 @@ Without a project you work on a single drawing (**File** menu: New, Open, Save �
 - **Layout**: the paper sheet (e.g. DIN A4 landscape). It holds the frame, the title
   block and **viewports**, which are windows onto the model with their own scale.
   Create a viewport with **Insert > Place viewport**.
-- **Insert > Frame + title block…**: places the sheet margin and a title block from a
-  template. Your own title blocks are ordinary drawings (`*.cadjson`) in the folder
+- **Insert > Frame + title block…**: choose a template or select the frame-only
+  option. The app opens the layout and fits the sheet on screen after insertion.
+  Your own title blocks are ordinary drawings (`*.cadjson`) in the folder
   `title_blocks/`; their origin is the lower right corner of the sheet frame.
   Fields such as `PAGE`, `PAGES`, `SHEET`, `PROJECT`, `DATE`, `SCALE`, `FORMAT` are
   filled in automatically. With **Project > Project properties…** you enter customer,

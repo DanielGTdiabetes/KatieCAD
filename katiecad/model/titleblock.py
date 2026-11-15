@@ -231,6 +231,19 @@ def list_templates(folders):
     return sorted(found.items(), key=lambda kv: kv[0].lower())
 
 
+def default_template(templates, paper_format, lang):
+    """Path of the standard template for the paper size and UI language."""
+    size = paper_format.partition(" ")[0]
+    if size in ("A2", "A1", "A0"):
+        size = "A2-A0"
+    paths = {name.replace(" ", "_").casefold(): path for name, path in templates}
+    for language in (lang, "en", "de"):
+        path = paths.get(f"title_block_{size}_{language}".casefold())
+        if path is not None:
+            return path
+    return None
+
+
 def load_template(path, element_factory):
     """Model elements of a template file (list). Raises OSError/ValueError."""
     with open(path, "r", encoding="utf-8") as f:

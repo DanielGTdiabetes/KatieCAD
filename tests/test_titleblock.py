@@ -40,6 +40,13 @@ with open(os.path.join(tmp, "prog", "kaputt.cadjson"), "w") as f:
 lst = TB.list_templates([os.path.join(tmp, "prog"), os.path.join(tmp, "proj", "title_blocks")])
 check([n for n, _ in lst] == ["A", "B", "kaputt"], "Vorlagen werden gelistet: %s" % [n for n, _ in lst])
 check(TB.program_folder().endswith("title_blocks"), "Programmordner title_blocks")
+standard = TB.list_templates([TB.program_folder()])
+check(os.path.basename(TB.default_template(standard, "A3 (420x297)", "es")) == "title_block_A3_es.cadjson",
+      "A3 auf Spanisch")
+check(os.path.basename(TB.default_template(standard, "A4 (297x210)", "en")) == "title_block A4_en.cadjson",
+      "A4 auf Englisch mit Leerzeichen im Dateinamen")
+check(os.path.basename(TB.default_template(standard, "A1 (841x594)", "es")) == "title_block_A2-A0_es.cadjson",
+      "Gemeinsamer Schriftkopf für A2 bis A0")
 
 class T(A.CadApp):
     view = {"zoom": 2.0, "ox": 0, "oy": 0}
@@ -52,6 +59,7 @@ def make():
     a.layouts = [core.Layout("Layout1", "A3 (420x297)", "#1c132d")]; a.aktives_layout = 0
     a._ist_layout = lambda: True; a._zustand = lambda: {"n": 0}
     a.redraw = MagicMock(); a.auswahl = []
+    a.zoom_grenzen = MagicMock()
     a.massstab = NS(get=lambda: "1:50")
     return a
 D = lambda *x, **k: None
@@ -88,11 +96,22 @@ check(len([e for e in le if TB.is_title_block(e)]) == 1, "erneutes Einfuegen ers
 check(sum(isinstance(e, core.Rechteck) for e in le) == n_rect, "Rahmen wird nicht doppelt gezeichnet")
 A.TitleBlockDialog = lambda *x, **k: NS(result="")
 a.rahmen_einfuegen()
-check(not any(TB.is_title_block(e) for e in a.layouts[0].elemente), "nur Rahmen: Schriftkopf entfernt")
+check(not any(TB.is_title_block(e) for e in a.layouts[0].elemente) and not a.auswahl,
+      "nur Rahmen: Schriftkopf aus Layout und Auswahl entfernt")
 A.TitleBlockDialog = lambda *x, **k: NS(result=os.path.join(tmp, "prog", "kaputt.cadjson"))
 a.rahmen_einfuegen(); check(A.messagebox.showerror.called, "defekte Vorlage meldet Fehler")
-a._ist_layout = lambda: False; a.status.reset_mock(); a.rahmen_einfuegen()
-check(a.status.set.called, "im Modell: nur Hinweis")
+a._ist_layout = lambda: False
+a._ansicht_aktuelles_layout = MagicMock(side_effect=lambda: setattr(a, "_ist_layout", lambda: True))
+a.zoom_grenzen.reset_mock()
+A.TitleBlockDialog = lambda *x, **k: NS(result=None)
+a.rahmen_einfuegen()
+check(not a._ist_layout() and not a.zoom_grenzen.called, "Abbrechen bleibt im Modell")
+A.TitleBlockDialog = lambda *x, **k: NS(result=lst[0][1])
+a.rahmen_einfuegen()
+check(a._ist_layout() and a._ansicht_aktuelles_layout.call_count == 1 and a.zoom_grenzen.call_count == 1,
+      "Einfügen aus dem Modell öffnet das Layout und passt die Ansicht an")
+a.zoom_grenzen.assert_called_once_with(grenzen=(0.0, 0.0, 420, 297))
+check(any(TB.is_title_block(e) for e in a.layout_elemente), "Schriftkopf im Layout gespeichert")
 
 # ---- A4: different margin, old frames are replaced
 a = make(); a.layouts[0].format = "A4 (297x210)"

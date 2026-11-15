@@ -2676,36 +2676,37 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
     def layer_verwalten(self):
         LayerDialog(self.root, self)
 
-    def zoom_grenzen(self, event=None):
-        liste = self.elemente if not self._ist_layout() else self.layout_elemente
+    def zoom_grenzen(self, event=None, *, grenzen=None):
         cw = self.canvas.winfo_width() or 1200
         ch = self.canvas.winfo_height() or 700
-        if not liste:
-            self.view["zoom"] = 1.5
-            self.view["ox"] = cw / 2
-            self.view["oy"] = ch / 2
-            self.redraw()
-            self._zeichne_raster()
-            self.status.set(tr("txt.0070"))
-            return
-        xs, ys = [], []
-        for el in liste:
-            if not self._ist_layout():                 # hidden layers do not count
-                l = self.layers.get(getattr(el, "layer", None))
-                if l is not None and not l.sichtbar:
+        if grenzen is None:
+            liste = self.elemente if not self._ist_layout() else self.layout_elemente
+            if not liste:
+                self.view["zoom"] = 1.5
+                self.view["ox"] = cw / 2
+                self.view["oy"] = ch / 2
+                self.redraw()
+                self._zeichne_raster()
+                self.status.set(tr("txt.0070"))
+                return
+            xs, ys = [], []
+            for el in liste:
+                if not self._ist_layout():             # hidden layers do not count
+                    l = self.layers.get(getattr(el, "layer", None))
+                    if l is not None and not l.sichtbar:
+                        continue
+                try:
+                    b = el.bbox()
+                except Exception:
                     continue
-            try:
-                b = el.bbox()
-            except Exception:
-                continue
-            if not b or not all(isinstance(w, (int, float)) and math.isfinite(w) for w in b[:4]):
-                continue
-            xs.extend([b[0], b[2]])
-            ys.extend([b[1], b[3]])
-        if not xs or not ys:
-            return
-        minx, maxx = min(xs), max(xs)
-        miny, maxy = min(ys), max(ys)
+                if not b or not all(isinstance(w, (int, float)) and math.isfinite(w) for w in b[:4]):
+                    continue
+                xs.extend([b[0], b[2]])
+                ys.extend([b[1], b[3]])
+            if not xs or not ys:
+                return
+            grenzen = (min(xs), min(ys), max(xs), max(ys))
+        minx, miny, maxx, maxy = grenzen
         bw = maxx - minx
         bh = maxy - miny
         if bw < 1e-6: bw = 10.0
@@ -6538,16 +6539,16 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         """Sheet margin (left 20 mm, otherwise 5 mm) and title block from a
         template drawing (folder title_blocks). An existing title block
         is replaced."""
-        if not self._ist_layout():
-            self.status.set(tr("msg.tb.nur_layout"))
-            return
         p = self.projekt
         ordner = TB.template_folders(p.ordner if p is not None else None)
-        eintraege = [(tr("dlg.tb.ohne"), None)]
-        eintraege += [(n, pf) for n, pf in TB.list_templates(ordner)]
+        vorlagen = TB.list_templates(ordner)
+        eintraege = [(tr("dlg.tb.ohne"), None)] + vorlagen
         cfg = lade_konfiguration()
+        vorgabe = cfg.get("title_block")
+        if vorgabe != "" and not any(pfad == vorgabe for _, pfad in vorlagen):
+            vorgabe = TB.default_template(vorlagen, self.layout_format, SPRACHE["aktuell"])
         dlg = TitleBlockDialog(
-            self.root, eintraege, preselect=cfg.get("title_block"),
+            self.root, eintraege, preselect=vorgabe,
             on_open_folder=lambda: self._ordner_oeffnen(ordner[0]),
             folders_text=tr("dlg.tb.ordner_zeile", pfad=ordner[0]))
         if dlg.result is None:
@@ -6569,6 +6570,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         except Exception:
             pass
 
+        if not self._ist_layout():
+            self._ansicht_aktuelles_layout()
         self._snapshot()
         b, h = ZEICHNUNGSFORMATE[self.layout_format]
         liste = self.layout_elemente
@@ -6598,10 +6601,14 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self._attribute_abfragen(ref)
             liste.append(ref)
             self.auswahl = [ref]
+        else:
+            self.auswahl = [e for e in self.auswahl if e in liste]
+        self.root.update_idletasks()
+        self.zoom_grenzen(grenzen=aussen)
+        if elemente:
             self.status.set(tr("msg.tb.eingefuegt", name=name))
         else:
             self.status.set(tr("msg.tb.nur_rahmen"))
-        self.redraw()
 
     def schriftkopf_vorlage_speichern(self):
         """Saves the model drawing as a title block template."""

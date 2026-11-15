@@ -1,6 +1,7 @@
 # Änderungen
 
 ## Unveröffentlicht
+- Fix: Rahmen und Schriftkopf lassen sich aus der Modellansicht einfügen. Die App öffnet und zentriert das Layout und schlägt zunächst eine Vorlage für Papierformat und Oberflächensprache vor.
 - Fix: Die Drahtnummerierung weist Zählformate ohne eindeutige Nummern zurück, Klemmenlisten erben das Leistenkennzeichen des Schaltplans und gleichnamige 3D-Quellen erhalten getrennte Cache-Dateien.
 - Fix: **SPS-Symbole** (`symbols/10 PLC`) haben ihre unsichtbaren Attribute zurück (SPS-Art, Station, Steckplatz, Symbol/Kommentar je Kanal) – die SPS-Liste war mit den neu gezeichneten Symbolen leer. Werkzeug `tools/plc_attribute_ergaenzen.py` (ergänzt nur Fehlendes, auch für eigene Symbolordner)
 - Fix: Protokolldatei: unter Windows wurde die vorige Datei nicht zu `.old` umbenannt (sie war noch offen)

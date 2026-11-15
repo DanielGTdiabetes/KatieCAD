@@ -4482,7 +4482,9 @@ class TitleBlockDialog(tk.Toplevel):
             self.lb.insert(tk.END, label)
         self.lb.pack(fill=tk.BOTH, expand=True)
         idx = 1 if len(entries) > 1 else 0
-        if preselect in self._keys:
+        if preselect == "" and None in self._keys:
+            idx = self._keys.index(None)
+        elif preselect is not None and preselect in self._keys:
             idx = self._keys.index(preselect)
         self.lb.selection_set(idx)
         self.lb.see(idx)
