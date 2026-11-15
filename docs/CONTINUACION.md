@@ -140,8 +140,7 @@ puntos de captura definidos por el usuario y carril DIN (punto 7).
    Asignar modelo 3D», «3D > Colocar equipos», test `tests/test_geraete3d.py`). **HECHO también el
    nivel «por símbolo»**: tabla del proyecto `p.daten["symbol_modelle"]` = {nombre de bloque: ruta}
    o atributo `MODELL3D` con valor por defecto en la definición del bloque; prioridad equipo >
-   artículo > símbolo; el diálogo `ModellZielDialog` sustituye a la pregunta Sí/No. Falta: puntos
-   de captura propios.
+   artículo > símbolo; el diálogo `ModellZielDialog` sustituye a la pregunta Sí/No.
    Diseño original: **Modelo 3D asociado al símbolo** (petición del usuario, 15-11-2026): asignar el STEP una vez y
    tenerlo ya disponible al pasar a 3D. Tres niveles, del más general al más concreto:
    - **por artículo** (TYP + fabricante, en el catálogo de piezas del proyecto `p.daten["bauteile"]`):
@@ -149,7 +148,11 @@ puntos de captura definidos por el usuario y carril DIN (punto 7).
    - **por símbolo** (atributo `MODELL3D` en la definición del bloque / `.katieblock`);
    - **por equipo** (atributo `MODELL3D` del `BlockReferenz`, gana a los anteriores).
    Al entrar en 3D, «Colocar equipos» lista los equipos del proyecto con modelo y sin colocar.
-5. **Puntos de captura** (petición del usuario): cada modelo importado necesita uno o varios puntos
+5. **HECHO (15-11-2026):** puntos propios al importar (`modell3d.punkte_lesen`,
+   `eigene_punkte_setzen`, tipo `"befestigung"`, `DIN z` = altura del punto `hutschiene`;
+   `laden_oder_importieren` y `vorgabe_punkte` los conservan en la caché). Falta: elegir con el
+   ratón qué punto del equipo es la referencia al colocarlo (hoy la esquina trasera inferior izquierda).
+   Diseño original: **Puntos de captura** (petición del usuario): cada modelo importado necesita uno o varios puntos
    para moverlo y encajarlo: automáticos (esquinas de la caja, centro de la trasera, punto medio de
    la trasera a la altura del carril DIN = punto de enganche) y opcionales definidos al importar
    (taladros de fijación). Guardarlos en el `.katie3d` (`"fang": [[x, y, z, "art"], ...]`) e

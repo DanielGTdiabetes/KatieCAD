@@ -11,7 +11,8 @@ mesh (Koerper3D art "netz"):
   3. align:     the front of the device looks to -Y (towards the cabinet door), up is +Z,
                 the back lies in y = 0: x in [0, width], y in [-depth, 0], z in [0, height]
   4. snap points: corners of the box, centre of the back and the DIN rail point (middle
-                of the back), used to move and place the device
+                of the back), used to move and place the device; the user may add the
+                fixing holes and move the DIN rail point (`eigene_punkte_setzen`)
   5. cache:     a .katie3d file (JSON) so a STEP is converted only once
 
     {"format": "katiecad-3d", "version": 1, "quelle": "contactor.step", "front": "+Z",
@@ -235,6 +236,82 @@ def fangpunkte(masse):
     return out
 
 
+# Own snap points typed by the user: on the back of the device (y = 0), X from the left and
+# Z from the bottom as seen from the front, e.g. "10 5; 35 5; 10 75; 35 75; DIN 40"
+# (fixing holes + height of the DIN rail clip). Points: [[x, z]] fixing holes, din: z or None.
+EIGENE_ART = "befestigung"
+
+
+class PunkteFehler(ValueError):
+    pass
+
+
+def _zahl(t):
+    try:
+        return float(str(t).strip().replace(",", "."))
+    except ValueError:
+        raise PunkteFehler(str(t)) from None
+
+
+def punkte_lesen(text):
+    """'x z; x z; DIN z' -> ([[x, z], ...], din_z or None). Entries are separated by ';'
+    or new lines, the numbers of an entry by spaces (or ',' without spaces, then the
+    decimal mark is the point)."""
+    punkte, din = [], None
+    for teil in str(text or "").replace("\n", ";").split(";"):
+        teil = teil.strip()
+        if not teil:
+            continue
+        woerter = teil.split()
+        if woerter[0].upper() in ("DIN", "H", "TS"):
+            if len(woerter) != 2:
+                raise PunkteFehler(teil)
+            din = _zahl(woerter[1])
+            continue
+        if len(woerter) == 1:
+            woerter = woerter[0].split(",")
+        if len(woerter) != 2:
+            raise PunkteFehler(teil)
+        punkte.append([_zahl(woerter[0]), _zahl(woerter[1])])
+    return punkte, din
+
+
+def punkte_text(modell):
+    """Own snap points of a model as text for punkte_lesen (fixing holes, DIN height when it
+    is not the default middle of the back)."""
+    teile = ["%g %g" % (round(q[0], 3), round(q[2], 3))
+             for q in modell.get("fang", ()) if q[3] == EIGENE_ART]
+    h = (modell.get("masse") or (0, 0, 0))[2]
+    for q in modell.get("fang", ()):
+        if q[3] == "hutschiene" and abs(q[2] - h / 2.0) > 1e-6:
+            teile.append("DIN %g" % round(q[2], 3))
+    return "; ".join(teile)
+
+
+def eigene_punkte_setzen(modell, punkte, din=None):
+    """Replaces the fixing hole points of the model (changed in place) and sets the height
+    of the DIN rail point (None = middle of the back). Points outside the back of the
+    device raise PunkteFehler. -> True when something changed."""
+    w, d, h = modell.get("masse") or (0.0, 0.0, 0.0)
+    eps = 1e-6
+    for x, z in punkte:
+        if not (-eps <= x <= w + eps and -eps <= z <= h + eps):
+            raise PunkteFehler("%g %g" % (x, z))
+    if din is not None and not (-eps <= din <= h + eps):
+        raise PunkteFehler("DIN %g" % din)
+    alt = [list(q) for q in modell.get("fang", ())]
+    neu = []
+    for q in alt:
+        if q[3] == EIGENE_ART:
+            continue
+        if q[3] == "hutschiene":
+            q = [w / 2.0, 0.0, h / 2.0 if din is None else float(din), "hutschiene"]
+        neu.append(q)
+    neu += [[float(x), 0.0, float(z), EIGENE_ART] for x, z in punkte]
+    modell["fang"] = neu
+    return neu != alt
+
+
 # ------------------------------------------------------------------
 # Whole import and the .katie3d cache
 # ------------------------------------------------------------------
@@ -267,6 +344,43 @@ def laden(pfad):
     if not isinstance(d, dict) or d.get("format") != FORMAT or "netz" not in d:
         raise ModellFehler("not a KatieCAD 3D model")
     return d
+
+
+def cache_aktuell(cache, quelle):
+    """True when the cache file exists and is not older than the source model."""
+    try:
+        return os.path.getmtime(cache) >= os.path.getmtime(quelle)
+    except OSError:
+        return False
+
+
+def laden_oder_importieren(pfad, cache=None, front="+Z", toleranz=0.5, punkte=None):
+    """Model of `pfad` through the cache file `cache` (None = no cache): converts only when
+    the cache is missing or older, then applies the own snap points `punkte` = (points,
+    din) when given and writes the cache when something is new. -> model dict."""
+    neu = False
+    if cache and cache_aktuell(cache, pfad):
+        modell = laden(cache)
+    else:
+        modell = importieren(pfad, front, toleranz)
+        neu = True
+    if punkte is not None and eigene_punkte_setzen(modell, *punkte):
+        neu = True
+    if cache and neu:
+        os.makedirs(os.path.dirname(os.path.abspath(cache)), exist_ok=True)
+        speichern(cache, modell)
+    return modell
+
+
+def vorgabe_punkte(ordner, quelle, front):
+    """Own snap points (text) of an existing, current cache of `quelle`, or ''."""
+    cache = cache_pfad(ordner, quelle, front)
+    if not cache_aktuell(cache, quelle):
+        return ""
+    try:
+        return punkte_text(laden(cache))
+    except (ModellFehler, OSError, ValueError):
+        return ""
 
 
 def cache_pfad(ordner, quelle, front):

@@ -5360,10 +5360,12 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self.root.config(cursor="watch")
             self.root.update_idletasks()
             try:
-                if not (os.path.exists(ziel) and os.path.getmtime(ziel) >= os.path.getmtime(pfad)):
-                    modell = MD.importieren(pfad, einst["front"], einst["toleranz"])
-                    os.makedirs(ordner, exist_ok=True)
-                    MD.speichern(ziel, modell)
+                MD.laden_oder_importieren(pfad, ziel, einst["front"], einst["toleranz"],
+                                          einst.get("punkte"))
+            except MD.PunkteFehler as ex:
+                messagebox.showerror(tr("d3.modell.titel"), tr("d3.modell.punkte_fehler", p=str(ex)),
+                                     parent=self.root)
+                return None
             except (MD.ModellFehler, OSError, ValueError) as ex:
                 messagebox.showerror(tr("d3.modell.titel"), str(ex), parent=self.root)
                 return None
@@ -5408,7 +5410,10 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             return
         einst = {"front": "+Z", "toleranz": 0.5}
         if ext != ".katie3d":
-            dlg = ModellImportDialog(self.root, os.path.basename(pfad), ext in (".step", ".stp"))
+            p = self.projekt
+            ordner = os.path.join(p.ordner, "3D") if p is not None else os.path.dirname(pfad)
+            dlg = ModellImportDialog(self.root, os.path.basename(pfad), ext in (".step", ".stp"),
+                                     vorgabe=lambda front: MD.vorgabe_punkte(ordner, pfad, front))
             self.root.wait_window(dlg)
             if not dlg.result:
                 return

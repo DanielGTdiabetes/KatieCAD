@@ -95,6 +95,44 @@ try:
     os.makedirs(os.path.dirname(cache))
     MD.speichern(cache, m)
     check(MD.importieren(cache)["netz"] == m["netz"], "Cache laden")
+
+    # ---- own snap points: fixing holes on the back, DIN rail height
+    check(MD.punkte_lesen("2 3; 8,5 17\n DIN 12 ;") == ([[2.0, 3.0], [8.5, 17.0]], 12.0),
+          "Punkte lesen (Leerzeichen, Dezimalkomma, Zeilen, DIN)")
+    check(MD.punkte_lesen("2,3") == ([[2.0, 3.0]], None), "x,z ohne Leerzeichen")
+    check(MD.punkte_lesen("  ") == ([], None), "leer")
+    for falsch in ("1 2 3", "a 2", "DIN"):
+        try:
+            MD.punkte_lesen(falsch)
+            check(False, "ungültig: " + falsch)
+        except MD.PunkteFehler:
+            check(True, "")
+    m2 = MD.importieren(stl, "+Z")
+    check(MD.eigene_punkte_setzen(m2, [[2, 3], [8, 17]], 12), "Punkte gesetzt")
+    bef = [q for q in m2["fang"] if q[3] == MD.EIGENE_ART]
+    check(bef == [[2.0, 0.0, 3.0, MD.EIGENE_ART], [8.0, 0.0, 17.0, MD.EIGENE_ART]], f"Befestigung: {bef}")
+    din = [q for q in m2["fang"] if q[3] == "hutschiene"]
+    check(din == [[5.0, 0.0, 12.0, "hutschiene"]], f"DIN-Höhe: {din}")
+    check(MD.punkte_text(m2) == "2 3; 8 17; DIN 12", MD.punkte_text(m2))
+    check(not MD.eigene_punkte_setzen(m2, [[2, 3], [8, 17]], 12), "unverändert")
+    check(MD.eigene_punkte_setzen(m2, [], None) and MD.punkte_text(m2) == ""
+          and len(m2["fang"]) == len(m["fang"]), "zurück auf automatische Punkte")
+    try:
+        MD.eigene_punkte_setzen(m2, [[11, 3]])
+        check(False, "außerhalb")
+    except MD.PunkteFehler:
+        check(True, "")
+    k = core.Koerper3D("netz", netzdaten=dict(m2["netz"], fang=[[2, 0, 3, MD.EIGENE_ART]]))
+    k.verschieben(100, 0, 0)
+    check(k.netzdaten["fang"][0][:3] == [102.0, 0.0, 3.0], "Punkt wandert mit dem Körper")
+    # through the cache: the points are kept, the vorgabe shows them
+    cache2 = MD.cache_pfad(os.path.join(ordner, "3D"), stl, "-Y")
+    MD.laden_oder_importieren(stl, cache2, "-Y", 0.5, ([[1, 1]], None))
+    check(MD.vorgabe_punkte(os.path.join(ordner, "3D"), stl, "-Y") == "1 1", "Vorgabe aus dem Cache")
+    t0 = os.path.getmtime(cache2)
+    m3 = MD.laden_oder_importieren(stl, cache2, "-Y", 0.5, None)
+    check(MD.punkte_text(m3) == "1 1" and os.path.getmtime(cache2) == t0, "Cache bleibt, Punkte bleiben")
+    check(MD.vorgabe_punkte(os.path.join(ordner, "3D"), stl, "+X") == "", "keine Vorgabe ohne Cache")
     try:
         MD.importieren(os.path.join(ordner, "x.obj"))
         check(False, "unbekanntes Format")

@@ -519,10 +519,13 @@ class GeraetePlatzierenDialog(tk.Toplevel):
 
 class ModellImportDialog(tk.Toplevel):
     """Import of a device model: front axis of the model, mesh tolerance, equipment
-    identifier. result = {"front", "toleranz", "ind"} or None."""
+    identifier and own snap points (fixing holes, DIN rail height).
+    vorgabe(front) -> text of the points already stored in the cache (or None).
+    result = {"front", "toleranz", "ind", "punkte": (points, din)} or None."""
 
-    def __init__(self, parent, datei, ist_step):
+    def __init__(self, parent, datei, ist_step, vorgabe=None):
         super().__init__(parent)
+        self._vorgabe = vorgabe
         self.result = None
         self.title(tr("d3.modell.titel"))
         self.transient(parent)
@@ -543,10 +546,19 @@ class ModellImportDialog(tk.Toplevel):
         ttk.Label(f, text=tr("d3.modell.ind")).grid(row=3, column=0, sticky=tk.W, pady=2)
         self.ind = tk.StringVar(value="")
         ttk.Entry(f, textvariable=self.ind, width=14).grid(row=3, column=1, sticky=tk.W)
+        ttk.Label(f, text=tr("d3.modell.punkte")).grid(row=4, column=0, columnspan=2, sticky=tk.W,
+                                                       pady=(8, 2))
+        self.punkte = tk.StringVar(value="")
+        ttk.Entry(f, textvariable=self.punkte, width=48).grid(row=5, column=0, columnspan=2,
+                                                              sticky=tk.W)
+        ttk.Label(f, text=tr("d3.modell.punkte_hinweis"), style="Hint.TLabel", wraplength=380,
+                  justify=tk.LEFT).grid(row=6, column=0, columnspan=2, sticky=tk.W, pady=(2, 0))
+        self.front.trace_add("write", lambda *a: self._vorgabe_laden())
+        self._vorgabe_laden()
         ttk.Label(f, text=tr("d3.modell.hinweis"), style="Hint.TLabel", wraplength=380,
-                  justify=tk.LEFT).grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+                  justify=tk.LEFT).grid(row=7, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
         bt = ttk.Frame(f)
-        bt.grid(row=5, column=0, columnspan=2, pady=(10, 0))
+        bt.grid(row=8, column=0, columnspan=2, pady=(10, 0))
         ttk.Button(bt, text="OK", command=self._ok).pack(side=tk.LEFT, padx=6)
         ttk.Button(bt, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=6)
         self.bind("<Return>", lambda ev: self._ok())
@@ -562,8 +574,20 @@ class ModellImportDialog(tk.Toplevel):
         except ValueError:
             messagebox.showerror(tr("d3.titel"), tr("d3.msg.zahl"), parent=self)
             return
-        self.result = {"front": self.front.get(), "toleranz": t, "ind": self.ind.get().strip()}
+        from katiecad.fileio.modell3d import punkte_lesen, PunkteFehler
+        try:
+            punkte = punkte_lesen(self.punkte.get())
+        except PunkteFehler as ex:
+            messagebox.showerror(tr("d3.titel"), tr("d3.modell.punkte_fehler", p=str(ex)), parent=self)
+            return
+        self.result = {"front": self.front.get(), "toleranz": t, "ind": self.ind.get().strip(),
+                       "punkte": punkte}
         self.destroy()
+
+    def _vorgabe_laden(self):
+        """Shows the points already stored for this source and front axis."""
+        if self._vorgabe is not None:
+            self.punkte.set(self._vorgabe(self.front.get()) or "")
 
 
 class MassDialog(tk.Toplevel):
@@ -2720,7 +2744,15 @@ class Ansicht3D(tk.Frame):
         if ext == ".katie3d":
             einst = {"front": "+Z", "toleranz": 0.5, "ind": ""}
         else:
-            dlg = ModellImportDialog(self.app.root, os.path.basename(pfad), ext in (".step", ".stp"))
+            p = getattr(self.app, "projekt", None)
+            vorgabe = None
+            if p is not None:
+                ordner = os.path.join(p.ordner, "3D")
+
+                def vorgabe(front):
+                    return MD.vorgabe_punkte(ordner, pfad, front)
+            dlg = ModellImportDialog(self.app.root, os.path.basename(pfad), ext in (".step", ".stp"),
+                                     vorgabe=vorgabe)
             self.app.root.wait_window(dlg)
             if not dlg.result:
                 return
@@ -2732,13 +2764,12 @@ class Ansicht3D(tk.Frame):
         self.app.root.config(cursor="watch")
         self.app.root.update_idletasks()
         try:
-            if cache and os.path.exists(cache) and os.path.getmtime(cache) >= os.path.getmtime(pfad):
-                modell = MD.laden(cache)
-            else:
-                modell = MD.importieren(pfad, einst["front"], einst["toleranz"])
-                if cache:
-                    os.makedirs(os.path.dirname(cache), exist_ok=True)
-                    MD.speichern(cache, modell)
+            modell = MD.laden_oder_importieren(pfad, cache, einst["front"], einst["toleranz"],
+                                               einst.get("punkte"))
+        except MD.PunkteFehler as ex:
+            messagebox.showerror(tr("d3.modell.titel"), tr("d3.modell.punkte_fehler", p=str(ex)),
+                                 parent=self.app.root)
+            return
         except (MD.ModellFehler, OSError, ValueError) as ex:
             messagebox.showerror(tr("d3.modell.titel"), str(ex), parent=self.app.root)
             return
