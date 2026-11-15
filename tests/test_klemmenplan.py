@@ -121,6 +121,15 @@ ausser = [e for e in seiten[0] if isinstance(e, (core.Linie, core.Rechteck))
                    and flaeche[1] - 1 <= e.bbox()[1] and e.bbox()[3] <= flaeche[3] + 1)]
 check(not ausser, f"alles innerhalb der Fläche: {len(ausser)}")
 
+# colours as in panel tools: PE green-yellow, N blue, others grey; screws and DIN rail
+check([LB.klemmen_art(z) for z in ({"num": "PE"}, {"num": "7", "typ": "UT 2,5-PE"},
+                                    {"num": "N"}, {"num": "3", "typ": "UT 2,5 BU"},
+                                    {"num": "3", "typ": "UT 2,5"})] == ["pe", "pe", "n", "n", ""],
+      "Klemmenart aus Nummer/Typ")
+farben = {e.farbe for e in seiten[0] if isinstance(e, core.Schraffur) and e.eig_farbe}
+check(LB.FARBE_KLEMME in farben and LB.FARBE_SCHIENE in farben, f"Klemmen grau, Tragschiene: {farben}")
+check(sum(isinstance(e, core.Kreis) for e in seiten[0]) == 2 * len(kp), "zwei Schrauben je Klemme")
+
 # many terminals -> several pages, two strips -> separate pages
 viele = []
 for i in range(60):

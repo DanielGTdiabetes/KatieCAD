@@ -198,7 +198,29 @@ Orden propuesto: 3 (pequeño, útil ya) → 2 (canaleta) → 1 (mecanizado + lis
 colocación de equipos (4.1–4.2), porque la colocación y la canaleta comparten el plano de
 la placa de montaje.
 
-### 4.4 Alternativa: conector con SolidCraft en lugar de ampliar el 3D propio
+### 4.4 Referencia visual: EPLAN Pro Panel (capturas del usuario, 15-11-2026)
+
+El usuario busca algo parecido a EPLAN Pro Panel:
+
+- **Armario 3D:** envolvente transparente con puerta, placa de montaje, equipos con su STEP
+  (seccionador rojo, pantalla, PLC, contactores, guardamotores, fuentes), **canaletas con su
+  rótulo** («Wire duct»), carriles DIN, prensaestopas en el fondo, baliza en el techo.
+- **Regletas en 3D** sobre carril, con colores por tipo (gris, azul N, verde-amarillo PE) y
+  **cableado en 3D** por las canaletas, cada hilo con su color.
+- **Regleta en 2D** (plano de conexiones de bornes): bornes con tornillos, colores por tipo,
+  número arriba, hilos hacia arriba y abajo, carril, cuadro del cable abajo. → La vista gráfica
+  de regletas (`reports/leistenbild.py`) ya sigue este estilo (colores, tornillos, carril).
+
+Pendiente para acercarse más: rótulo de canaleta en 3D, carriles DIN como elemento, regletas en
+3D generadas desde el esquema, enrutado de hilos por canaleta (muy grande, al final).
+
+**Catálogo Unex Canal 77** (`report_templates/kanal_katalog.json`): 25 medidas tomadas de la
+librería BIM de Unex (<https://www.unex.net/es/bim>, sección «Canal 77», archivos STEP
+`18.20.77` … `100.150.77`). **Supuesto sin confirmar:** referencia = alto.ancho.77. Para
+confirmarlo: descargar un STEP (p. ej. `60.40.77`) y medir su caja con OCP, o mirar el catálogo
+Unex. Los STEP de la canaleta también podrían usarse como modelo 3D real más adelante.
+
+### 4.5 Alternativa: conector con SolidCraft en lugar de ampliar el 3D propio
 
 Idea del usuario: prescindir del 3D de KatieCAD y conectar con **SolidCraft**
 (<https://github.com/tangency-labs/solidcraft>, <https://solidcraft.io>).
@@ -250,7 +272,7 @@ Decisión pendiente del usuario: 3D propio (4.1–4.3) o conector SolidCraft (4.
 (lista de mecanizados), 4.3.2 (datos de canaleta) y 4.3.3 (desplazar con offset) sirven en
 ambos casos.
 
-### 4.5 Entorno de prueba usado
+### 4.6 Entorno de prueba usado
 
 En la sesión se creó un entorno aislado temporal con `ezdxf 1.4.5`, `ezdwg`, `cadquery-ocp-novtk
 8.0.1.1` y Pillow (comprobado: `from OCP.STEPControl import STEPControl_Reader` funciona). Está en

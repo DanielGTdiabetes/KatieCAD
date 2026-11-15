@@ -27,8 +27,9 @@ PROG = os.path.join(WURZEL, "report_templates")
 # ---- catalogue: program file, project file wins, broken file ignored
 kat = KK.katalog_laden([PROG])
 check(kat["max_laenge"] == 2000 and len(kat["kanaele"]) >= 10, f"Programmkatalog: {len(kat['kanaele'])}")
-check(any(k["name"] == "40 x 60" and k["breite"] == 40 and k["hoehe"] == 60 for k in kat["kanaele"]),
-      "Eintrag 40 x 60")
+check(any(k["ref"] == "60.40.77" and k["breite"] == 40 and k["hoehe"] == 60 and k["hersteller"] == "Unex"
+          for k in kat["kanaele"]), "Unex 77: 60.40.77 = 40 breit x 60 hoch (Annahme alto.ancho)")
+check(len(kat["kanaele"]) == 25, "25 Größen der Serie 77")
 tmp = tempfile.mkdtemp()
 try:
     with open(os.path.join(tmp, KK.DATEI), "w", encoding="utf-8") as f:
@@ -90,7 +91,7 @@ check("kanaele" in S.LISTEN and [s.key for s in S.lade_spalten("kanaele")[0]][-1
       "Liste und Spalten")
 
 from katiecad.ui.dialogs import katalog_name
-check(katalog_name(kat["kanaele"], 60.0, 40.0) == "60 x 40", "Dialog zeigt die Katalogmaße")
+check(katalog_name(kat["kanaele"], 60.0, 40.0).startswith("Unex 77 40.60.77"), "Dialog zeigt die Katalogmaße")
 check(katalog_name(kp["kanaele"], 1.0, 1.0, "U77-4060") == "40 x 60", "Referenz geht vor")
 check(katalog_name(kat["kanaele"], 33.0, 44.0) == "", "freie Maße")
 

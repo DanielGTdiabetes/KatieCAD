@@ -16,7 +16,7 @@ Input: the rows of reports.daten.klemmenplan (one strip = rows with the same
 
 import re
 
-from katiecad.model.core import Linie, Rechteck, Schraffur, Text, Polylinie
+from katiecad.model.core import Linie, Rechteck, Schraffur, Text, Polylinie, Kreis
 from katiecad.reports import tabelle as TAB
 from katiecad.reports.tabelle import LINIE, TEXT, Seite
 
@@ -29,6 +29,15 @@ TEXT_H = 2.0           # mm texts at the terminals
 NUM_H = 2.5            # mm terminal number
 MIN_H = 1.4            # mm smallest text when shrinking
 ZONE = 42.0            # mm longest text column above / below the terminals
+# Colours of the terminals (as printed by other panel tools): normal grey, protective
+# earth green with a yellow band, neutral blue; the DIN rail behind them
+FARBE_KLEMME = "#c8c8c8"
+FARBE_PE = "#2e9e44"
+FARBE_PE_BAND = "#f2d22e"
+FARBE_N = "#3d7fd1"
+FARBE_SCHIENE = "#d9b400"
+SCHIENE_H = 7.5          # mm visible height of the rail band (35 mm rail, scaled)
+SCHRAUBE_R = 1.4         # mm screw head radius
 # As mounted in the cabinet: internal wiring from above, field cables from below
 OBEN, UNTEN = "intern", "extern"
 
@@ -117,6 +126,25 @@ def leistenbild_seiten(zeilen, flaeche, titel="", skala=1.0, titel_leiste=""):
     return seiten
 
 
+def klemmen_art(z):
+    """'pe', 'n' or '' (normal) from the terminal number / type: PE, PEN or a type
+    with -PE / PE / GNYE; N or a blue type (-N, BU)."""
+    num = str(z.get("num") or "").strip().upper()
+    typ = str(z.get("typ") or "").strip().upper().replace(" ", "")
+    if num in ("PE", "PEN") or "PE" in typ.replace("SPE", "") or "GNYE" in typ:
+        return "pe"
+    if num == "N" or typ.endswith(("-N", "BU", "-BL")):
+        return "n"
+    return ""
+
+
+def _flaeche(el, x1, y1, x2, y2, farbe):
+    """Coloured fill (own colour, printed in colour)."""
+    pts = [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
+    el.append(Schraffur(pts, "solid", staerke=0.1, layer="0", farbe=farbe, eig_farbe=True,
+                        linientyp="Volllinie (schmal)"))
+
+
 def _deckel_nach(reihe, i):
     """End cover after terminal i: last terminal, or the type changes."""
     if i == len(reihe) - 1:
@@ -158,19 +186,33 @@ def _seite(reihe, idx, gk, flaeche, titel, titel_leiste, lanes, f, k, n):
     breite = sum(teil + (deckel if reihe[i].get("_trenn") or _deckel_nach(reihe, i)
                          else 0.0) for i in idx)
     x = (x1 + x2) / 2.0 - breite / 2.0
+    # DIN rail band behind the whole strip (from bracket to bracket)
+    sh = SCHIENE_H * f / 2.0
+    _flaeche(el, x - tope - 3 * f, ym - sh, x + breite + tope + 3 * f, ym + sh, FARBE_SCHIENE)
     _tope(el, x - tope, ku - 2 * f, ko + 2 * f, tope, True)
     xs = {}
     for i in idx:
         z = reihe[i]
+        art = klemmen_art(z)
+        _flaeche(el, x, ku, x + teil, ko, {"pe": FARBE_PE, "n": FARBE_N}.get(art, FARBE_KLEMME))
+        if art == "pe":                                   # green-yellow: yellow band
+            _flaeche(el, x + teil * 0.3, ku, x + teil * 0.7, ko, FARBE_PE_BAND)
         el.append(Rechteck(x, ku, x + teil, ko, staerke=0.35, **LINIE))
-        # DIN rail fixing line and terminal number
+        # screws (top / bottom connection) and the rail fixing line
+        r = SCHRAUBE_R * f
+        for ys in (ko - kh * 0.27, ku + kh * 0.27):
+            el.append(Kreis(x + teil / 2.0, ys, r, staerke=0.25, **LINIE))
+            el.append(Linie(x + teil / 2.0 - r * 0.7, ys - r * 0.7, x + teil / 2.0 + r * 0.7,
+                            ys + r * 0.7, staerke=0.18, **LINIE))
         el.append(Linie(x, ym - kh * 0.32, x + teil, ym - kh * 0.32, staerke=0.13, **LINIE))
+        # terminal number near the top edge
         num = z.get("num") or "?"
         h = _passend(num, kh * 0.5, NUM_H * f)
+        yn = ko - kh * 0.1
         if TAB._breite(num, h) > teil - 1.0 * f:
-            el.append(_txt(x + teil / 2.0, ym, num, h, 90.0))
+            el.append(_txt(x + teil / 2.0, ym + kh * 0.05, num, h, 90.0))
         else:
-            el.append(_txt(x + teil / 2.0, ym, num, h))
+            el.append(_txt(x + teil / 2.0, yn, num, h))
         cx = x + teil / 2.0
         xs[i] = cx
         _anschluss(el, z, OBEN, cx, ko, t_o, teil, f, True)
