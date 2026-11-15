@@ -2778,6 +2778,43 @@ class ListenAuswahlDialog(tk.Toplevel):
         self.destroy()
 
 
+class ModellZielDialog(tk.Toplevel):
+    """Assign 3D model: to whom - the selected devices, all devices of their type (parts
+    catalogue) or all devices with their symbol (project table). typen / symbole: names
+    shown (an empty list disables the option). result: 'geraet' | 'artikel' | 'symbol' | None."""
+
+    def __init__(self, parent, n, typen, symbole):
+        super().__init__(parent)
+        self.result = None
+        self.title(tr("menu.elektro.modell3d"))
+        self.transient(parent)
+        _modal(self)
+        self.configure(bg=FARBEN["bg_mittel"])
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=tr("dlg.modellziel.frage"), style="Title.TLabel").pack(anchor=tk.W)
+        self._var = tk.StringVar(value="geraet")
+        ttk.Radiobutton(f, text=tr("dlg.modellziel.geraet", n=n), value="geraet",
+                        variable=self._var).pack(anchor=tk.W, pady=(8, 1))
+        for wert, namen in (("artikel", typen), ("symbol", symbole)):
+            text = tr("dlg.modellziel." + wert, namen=", ".join(namen) if namen else "-")
+            ttk.Radiobutton(f, text=text, value=wert, variable=self._var,
+                            state=tk.NORMAL if namen else tk.DISABLED).pack(anchor=tk.W, pady=1)
+        ttk.Label(f, text=tr("dlg.modellziel.hinweis"), style="Hint.TLabel", wraplength=380
+                  ).pack(anchor=tk.W, pady=(8, 0))
+        bf = ttk.Frame(f)
+        bf.pack(pady=(12, 0))
+        ttk.Button(bf, text=tr("dlg.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
+        self.bind("<Return>", lambda e: self._ok())
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.wait_window(self)
+
+    def _ok(self):
+        self.result = self._var.get()
+        self.destroy()
+
+
 class MPrintDialog(tk.Toplevel):
     """Marker export for label printers (Weidmüller M-Print PRO).
     einst: settings (reports.mprint.einstellungen), anzahl: {kind: number of markers}.

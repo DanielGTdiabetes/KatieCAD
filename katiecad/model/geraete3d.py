@@ -3,11 +3,14 @@
 katiecad/model/geraete3d.py - 3D models of the devices of the schematic (NO Tkinter).
 
 A device gets its 3D model (a .katie3d file made by fileio/modell3d.py, path relative to
-the project folder) in two ways; the first that applies wins:
+the project folder) in three ways; the first that applies wins:
 
-  1. per device:  attribute MODELL3D of the device block (BlockReferenz.attribute)
+  1. per device:  attribute MODELL3D of the device block (BlockReferenz.attribute), when
+                  it differs from the default of the block definition
   2. per article: entry of the project parts catalogue with the same TYP
                   (p.daten["bauteile"]: {"typ", "hersteller", ..., "modell3d"})
+  3. per symbol:  project table p.daten["symbol_modelle"] = {block name: path}, or the
+                  default value of an attribute definition MODELL3D in the block itself
 
 `geraete_mit_modell` lists the devices of the project with their model and whether they
 are already placed in 3D (a Koerper3D whose `geraet` is the device identifier).
@@ -39,13 +42,39 @@ def artikel_modell(katalog, typ):
     return ""
 
 
-def modell_von(obj, katalog=None):
-    """-> (model path, source 'geraet' | 'artikel' | '')."""
+def _definition_modell(obj):
+    """Default value of the attribute definition MODELL3D of the block, or ''."""
+    try:
+        defs = obj.attribut_definitionen()
+    except AttributeError:
+        return ""
+    for ad in defs:
+        if str(getattr(ad, "tag", "")).upper() == ATTR:
+            return str(getattr(ad, "wert", "") or "").strip()
+    return ""
+
+
+def symbol_modell(obj, symbole=None):
+    """Model of the symbol (block name) of obj: project table first, then the default of
+    the block's own attribute definition MODELL3D. -> path or ''."""
+    name = str(getattr(obj, "block_name", "") or "")
+    if symbole and name:
+        m = str(symbole.get(name, "") or "").strip()
+        if m:
+            return m
+    return _definition_modell(obj)
+
+
+def modell_von(obj, katalog=None, symbole=None):
+    """-> (model path, source 'geraet' | 'artikel' | 'symbol' | '')."""
     eigen = str((getattr(obj, "attribute", {}) or {}).get(ATTR, "") or "").strip()
-    if eigen:
+    if eigen and eigen != _definition_modell(obj):
         return eigen, "geraet"
     a = artikel_modell(katalog, _typ(obj))
-    return (a, "artikel") if a else ("", "")
+    if a:
+        return a, "artikel"
+    s = symbol_modell(obj, symbole)
+    return (s, "symbol") if s else ("", "")
 
 
 def platziert(elemente):
@@ -59,10 +88,11 @@ def platziert(elemente):
     return out
 
 
-def geraete_mit_modell(blaetter, katalog=None, elemente_3d=()):
+def geraete_mit_modell(blaetter, katalog=None, elemente_3d=(), symbole=None):
     """One row per device identifier (main symbol first):
     [{"ind", "typ", "man", "modell", "quelle", "platziert", "_obj"}], sorted by identifier.
-    blaetter: [(sheet key, elements)]; elemente_3d: elements of the 3D scene."""
+    blaetter: [(sheet key, elements)]; elemente_3d: elements of the 3D scene;
+    symbole: project table {block name: model}."""
     from katiecad.electrical.logic import geraete
     from katiecad.reports.netz import natuerlich
     gesehen = {}
@@ -77,11 +107,11 @@ def geraete_mit_modell(blaetter, katalog=None, elemente_3d=()):
             alt = gesehen.get(ind)
             if alt is not None and (alt["_haupt"] or g["rolle"] != "haupt"):
                 if not alt["modell"]:                  # an auxiliary part may carry the model
-                    m, q = modell_von(obj, katalog)
+                    m, q = modell_von(obj, katalog, symbole)
                     if m:
                         alt.update(modell=m, quelle=q)
                 continue
-            m, q = modell_von(obj, katalog)
+            m, q = modell_von(obj, katalog, symbole)
             gesehen[ind] = {"ind": ind, "typ": _typ(obj), "man": _man(obj), "modell": m,
                             "quelle": q, "_haupt": g["rolle"] == "haupt", "_obj": obj}
     gesetzt = platziert(elemente_3d)
@@ -105,6 +135,20 @@ def geraet_setzen(objekte, pfad):
                 o.attribute.pop(ATTR, None)
             n += 1
     return n
+
+
+def symbol_setzen(symbole, namen, pfad):
+    """Sets (pfad) or removes ('') the model of the block names in the project table
+    {block name: path} (dict, changed in place). -> the table."""
+    for n in namen:
+        n = str(n or "")
+        if not n:
+            continue
+        if pfad:
+            symbole[n] = pfad
+        else:
+            symbole.pop(n, None)
+    return symbole
 
 
 def artikel_setzen(katalog, typ, pfad, hersteller=""):

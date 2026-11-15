@@ -489,7 +489,8 @@ class GeraetePlatzierenDialog(tk.Toplevel):
         for i, z in enumerate(self._zeilen):
             iid = self.tree.insert("", tk.END, iid=str(i), values=(
                 z["ind"], z["typ"], os.path.basename(z["modell"]) + (
-                    "  (" + tr("d3.platz.typ") + ")" if z["quelle"] == "artikel" else ""),
+                    "  (" + tr("d3.platz.typ") + ")" if z["quelle"] == "artikel" else
+                    "  (" + tr("d3.platz.symbol") + ")" if z["quelle"] == "symbol" else ""),
                 "✓" if z["platziert"] else ""))
             if erster is None and not z["platziert"]:
                 erster = iid
@@ -2680,9 +2681,10 @@ class Ansicht3D(tk.Frame):
                 return
             blaetter = [(k, b.elemente) for k, b in enumerate(infos)]
             katalog = p.daten.get("bauteile", [])
+            symbole = p.daten.get("symbol_modelle", {})
         else:
-            blaetter, katalog = [(0, app.elemente)], []
-        zeilen = G3.geraete_mit_modell(blaetter, katalog, app.elemente)
+            blaetter, katalog, symbole = [(0, app.elemente)], [], {}
+        zeilen = G3.geraete_mit_modell(blaetter, katalog, app.elemente, symbole)
         dlg = GeraetePlatzierenDialog(app.root, zeilen)
         app.root.wait_window(dlg)
         z = dlg.result

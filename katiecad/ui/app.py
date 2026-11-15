@@ -5416,18 +5416,24 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         rel = self.modell3d_konvertieren(pfad, einst)
         if not rel:
             return
+        from katiecad.ui.dialogs import ModellZielDialog
         typen = sorted({G3._typ(g) for g in geraete if G3._typ(g)})
+        namen = sorted({g.block_name for g in geraete if g.block_name})
         p = self.projekt
-        fuer_typ = False
-        if typen and p is not None:
-            antwort = messagebox.askyesnocancel(
-                tr("menu.elektro.modell3d"), tr("msg.modell3d.fuer_typ", typen=", ".join(typen)),
-                parent=self.root)
-            if antwort is None:
+        ziel = "geraet"
+        if p is not None and (typen or namen):
+            dlg = ModellZielDialog(self.root, len(geraete), typen, namen)
+            if dlg.result is None:
                 return
-            fuer_typ = antwort
+            ziel = dlg.result
         self._snapshot()
-        if fuer_typ:
+        if ziel == "symbol":
+            tab = dict(p.daten.get("symbol_modelle", {}))
+            G3.symbol_setzen(tab, namen, rel)
+            p.daten["symbol_modelle"] = tab
+            p.speichern()
+            self.status.set(tr("msg.modell3d.symbol_gesetzt", n=len(namen), datei=rel))
+        elif ziel == "artikel":
             kat = list(p.daten.get("bauteile", []))
             for t in typen:
                 man = next((G3._man(g) for g in geraete if G3._typ(g) == t), "")

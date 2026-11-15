@@ -70,6 +70,30 @@ check(len(kat) == 2 and kat[0]["modell3d"] == "3D/b.katie3d" and kat[1]["herstel
       and kat[1]["modell3d"] == "3D/gv2.katie3d", "pro Artikel gesetzt / neu")
 check(G3.artikel_setzen(kat, "", "x") is kat and len(kat) == 2, "ohne TYP nichts")
 
+# ---- per symbol: project table and attribute definition MODELL3D in the block
+k5 = geraet(0, 0, "-K5", "")
+check(G3.modell_von(k5, katalog, {"Sym": "3D/sym.katie3d"}) == ("3D/sym.katie3d", "symbol"),
+      "Modell des Symbols (Projekttabelle)")
+check(G3.modell_von(geraet(0, 0, "-K6", "LC1D09"), katalog, {"Sym": "3D/sym.katie3d"})[1] == "artikel",
+      "Artikel vor Symbol")
+m = core.ElektroMaske(8, 0)
+ad = core.AttributDefinition(0, 0, None, 2.5, tag="MODELL3D", prompt="MODELL3D", wert="3D/def.katie3d")
+k7 = core.BlockReferenz(0, 0, "SymDef", [core.Rechteck(-3, -5, 3, 5), m, ad])
+k7.attribute.update({"IND": "-K7"})
+check(k7.attribute.get("MODELL3D") == "3D/def.katie3d", "Vorgabe aus der Attributdefinition")
+check(G3.modell_von(k7) == ("3D/def.katie3d", "symbol"), "Vorgabe der Definition = Symbol")
+check(G3.modell_von(k7, None, {"SymDef": "3D/tab.katie3d"}) == ("3D/tab.katie3d", "symbol"),
+      "Projekttabelle vor Definition")
+k7.attribute["MODELL3D"] = "3D/k7.katie3d"
+check(G3.modell_von(k7) == ("3D/k7.katie3d", "geraet"), "geänderter Wert = eigenes Modell")
+zeilen = G3.geraete_mit_modell([(0, [k5])], katalog, (), {"Sym": "3D/sym.katie3d"})
+check(zeilen[0]["quelle"] == "symbol", "Geräteliste mit Symbolmodell")
+tab = {}
+G3.symbol_setzen(tab, ["Sym", "", "SymDef"], "3D/s.katie3d")
+check(tab == {"Sym": "3D/s.katie3d", "SymDef": "3D/s.katie3d"}, "pro Symbol gesetzt")
+G3.symbol_setzen(tab, ["Sym"], "")
+check(tab == {"SymDef": "3D/s.katie3d"}, "Symbolmodell entfernt")
+
 # ---- parts catalogue dialog returns only its columns
 vom_dialog = [{"typ": "LC1D09", "hersteller": "Schneider", "bestellnr": "123", "beschreibung": ""}]
 neu = G3.katalog_zusammenfuehren(kat, vom_dialog)

@@ -137,8 +137,11 @@ OCP generado en el test). Falta: asociación al símbolo/artículo y «Colocar e
 puntos de captura definidos por el usuario y carril DIN (punto 7).
 
 4. **HECHO (15-11-2026)** a nivel de equipo y de artículo (`model/geraete3d.py`, «Eléctrico >
-   Asignar modelo 3D», «3D > Colocar equipos», test `tests/test_geraete3d.py`). Falta el nivel
-   «por símbolo» (atributo `MODELL3D` en la definición del bloque) y puntos de captura propios.
+   Asignar modelo 3D», «3D > Colocar equipos», test `tests/test_geraete3d.py`). **HECHO también el
+   nivel «por símbolo»**: tabla del proyecto `p.daten["symbol_modelle"]` = {nombre de bloque: ruta}
+   o atributo `MODELL3D` con valor por defecto en la definición del bloque; prioridad equipo >
+   artículo > símbolo; el diálogo `ModellZielDialog` sustituye a la pregunta Sí/No. Falta: puntos
+   de captura propios.
    Diseño original: **Modelo 3D asociado al símbolo** (petición del usuario, 15-11-2026): asignar el STEP una vez y
    tenerlo ya disponible al pasar a 3D. Tres niveles, del más general al más concreto:
    - **por artículo** (TYP + fabricante, en el catálogo de piezas del proyecto `p.daten["bauteile"]`):
