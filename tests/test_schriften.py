@@ -17,7 +17,9 @@ check(abs(core.pdf_textbreite("Hallo", 10) - core.pdf_textbreite("Hallo", 10, Fa
 
 # a real font file somewhere on this machine (skip silently if there is none)
 gef = SF.scan()
-gef = {n: e for n, e in gef.items() if e["regular"] and not e["cff"]}
+# an EXTRA font: the standard ones (Arial ...) are built in and never "activated"
+gef = {n: e for n, e in gef.items() if e["regular"] and not e["cff"]
+       and n not in SF.STANDARD_SCHRIFTEN}
 if gef:
     name = sorted(gef)[0]
     check(SF.aktiviere([name], gef) == [name] and SF.ist_zusatz(name), "aktiviert")

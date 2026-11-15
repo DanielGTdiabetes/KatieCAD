@@ -40,14 +40,14 @@ python tests/run_all.py
 
 ### Estado de los tests
 
-`python tests/run_all.py`: todo pasa salvo **4 fallos que ya existían y no son del código nuevo**:
+`python tests/run_all.py`: **todo pasa** (15-11-2026). Los 4 fallos antiguos se corrigieron:
 
-| Test | Motivo |
+| Test | Causa y arreglo |
 |---|---|
-| `test_funktion` | `sps_art` del símbolo DI (pendiente de investigar aparte) |
-| `test_pdf_import` | falta `pypdf` en el Python del sistema |
-| `test_schriften` | depende de las fuentes instaladas en el PC |
-| `test_pruefung` | rotación del log (`.old`) en este PC |
+| `test_funktion` | Los símbolos PLC rehechos el 30-10-2026 habían perdido los atributos ocultos (`SPS`, `STATION`, `PLATZ`, `VPn_SYM/KOM`): la lista de PLC salía vacía. `tools/plc_attribute_ergaenzen.py` los vuelve a añadir (canales = pines que no son de alimentación; en el dibujo nuevo VP1 es M). El test ya no supone la geometría del símbolo. Dibujos ya hechos con esos símbolos llevan su copia sin atributos: hay que volver a insertarlos. |
+| `test_pruefung` | Fallo real en Windows: el log anterior seguía abierto y no se podía renombrar a `.old` (`common/logbuch._datei_oeffnen` lo cierra antes). |
+| `test_schriften` | El test elegía «Arial», que es fuente estándar y no se activa como extra; ahora elige una fuente no estándar. |
+| `test_pdf_import` | Sin `pypdf` se salta con aviso (como el STEP sin OCP); con `pip install -r requirements.txt` se ejecuta entero. |
 
 Con `ezdxf`/`ezdwg` instalados, `test_dxf_linientypen` además genera y relee un DXF y un DWG reales.
 
