@@ -3030,6 +3030,8 @@ class DrahtnummernDialog(tk.Toplevel):
         self.wait_window(self)
 
     def _ok(self):
+        from katiecad.electrical.drahtnummern import STANDARD, format_gueltig
+
         try:
             hoehe = float(self._hoehe.get().replace(",", "."))
         except ValueError:
@@ -3041,7 +3043,11 @@ class DrahtnummernDialog(tk.Toplevel):
             start = max(0, int(self._start.get()))
         except ValueError:
             start = 0
-        self.result = {"format": self._fmt.get().strip() or "{sheet}{n:02}", "start": start,
+        fmt = self._fmt.get().strip() or STANDARD["format"]
+        if not format_gueltig(fmt, start):
+            messagebox.showerror(tr("dlg.draht.titel"), tr("dlg.draht.format_fehler"), parent=self)
+            return
+        self.result = {"format": fmt, "start": start,
                        "sps": self._sps.get(), "potenzial": self._pot.get(),
                        "je_ast": self._ast.get(),
                        "hoehe": hoehe, "neu": self._neu.get(),

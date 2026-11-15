@@ -20,6 +20,7 @@ mesh (Koerper3D art "netz"):
      "masse": [width, depth, height]}
 """
 
+import hashlib
 import json
 import math
 import os
@@ -384,6 +385,9 @@ def vorgabe_punkte(ordner, quelle, front):
 
 
 def cache_pfad(ordner, quelle, front):
-    """Cache file of a source model in `ordner` (e.g. <project>/3D)."""
-    name = os.path.splitext(os.path.basename(str(quelle)))[0]
-    return os.path.join(ordner, "%s_%s.katie3d" % (name, front.replace("+", "p").replace("-", "m")))
+    """Cache file keyed by the source path (including suffix) and front axis."""
+    quelle = os.path.normcase(os.path.realpath(quelle))
+    kennung = hashlib.sha256(os.fsencode(quelle)).hexdigest()[:24]
+    name = os.path.splitext(os.path.basename(quelle))[0][:40]
+    achse = front.replace("+", "p").replace("-", "m")
+    return os.path.join(ordner, f"{name}_{achse}_{kennung}.katie3d")

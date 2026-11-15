@@ -90,11 +90,25 @@ try:
     m = MD.importieren(stl, "+Z")
     check(m["format"] == MD.FORMAT and m["masse"] == [10, 30, 20] and m["quelle"] == "schuetz.stl",
           "Import STL")
-    cache = MD.cache_pfad(os.path.join(ordner, "3D"), stl, "+Z")
-    check(cache.endswith("schuetz_pZ.katie3d"), f"Cache-Name: {cache}")
+    cache_ordner = os.path.join(ordner, "3D")
+    cache = MD.cache_pfad(cache_ordner, stl, "+Z")
+    check(cache == MD.cache_pfad(cache_ordner, os.path.join(ordner, ".", "schuetz.stl"), "+Z"),
+          "verschiedene Schreibweisen derselben Quelle")
+    check(cache != MD.cache_pfad(cache_ordner, os.path.join(ordner, "schuetz.step"), "+Z"),
+          "gleicher Name mit anderer Dateiendung")
     os.makedirs(os.path.dirname(cache))
     MD.speichern(cache, m)
     check(MD.importieren(cache)["netz"] == m["netz"], "Cache laden")
+    os.mkdir(os.path.join(ordner, "anderes_modell"))
+    stl2 = os.path.join(ordner, "anderes_modell", "schuetz.stl")
+    stl_binaer(stl2, *quader_dreiecke(15, 25, 35))
+    alt = os.path.getmtime(cache) - 10
+    os.utime(stl2, (alt, alt))
+    anderer_cache = MD.cache_pfad(cache_ordner, stl2, "+Z")
+    check(MD.laden_oder_importieren(stl2, anderer_cache)["masse"] == [15, 35, 25],
+          "ältere Quelle mit gleichem Namen übernimmt nicht den fremden Cache")
+    check(anderer_cache != cache and MD.laden(cache)["netz"] == m["netz"],
+          "zweiter Import überschreibt bestehende Zuordnung nicht")
 
     # ---- own snap points: fixing holes on the back, DIN rail height
     check(MD.punkte_lesen("2 3; 8,5 17\n DIN 12 ;") == ([[2.0, 3.0], [8.5, 17.0]], 12.0),

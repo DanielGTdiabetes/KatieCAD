@@ -16,8 +16,8 @@ Terminals with the same number in the same strip are ONE terminal drawn several 
 Works on element objects (open sheet) and on the plain dicts of the JSON sheet files.
 """
 
-from katiecad.electrical.klemmen_nummern import (klemmen, natuerlich, _wert, _get, _setzen,
-                                                  hat_buchstaben, format_nummer)
+from katiecad.electrical.klemmen_nummern import (klemmen_mit_leiste, natuerlich, _wert, _get,
+                                                  _setzen, hat_buchstaben, format_nummer)
 
 FELDER = ("num", "typ", "man", "per")
 _TAG = {"num": "NUM", "typ": "TYP", "man": "MAN", "per": "PER"}
@@ -37,8 +37,8 @@ def zeilen(blaetter, leiste, ziele=None):
     reihe = {b: i for i, (b, _e) in enumerate(blaetter)}
     gruppen = {}
     for b, elemente in blaetter:
-        for w, x, y, el in klemmen(elemente, True):
-            if _wert(w.get("IND"), "IND") != leiste:
+        for ind, w, x, y, el in klemmen_mit_leiste(elemente):
+            if ind != leiste:
                 continue
             num = _wert(w.get("NUM"), "NUM")
             schl = ("n", num) if num else ("e", id(el))

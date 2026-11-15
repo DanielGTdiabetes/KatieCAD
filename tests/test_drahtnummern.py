@@ -113,6 +113,21 @@ nummerieren([(4, b)], einstellung=e, sheet_nr=lambda k: k + 1)
 check([l.inhalt for l in labels(b)] == ["W5-01"], f"Format: {[l.inhalt for l in labels(b)]}")
 check(DN.format_text("{kaputt}", 2, "2", 3) == "203", "ungültiges Format -> Standard")
 check(DN.format_text("{hoja}/{n}", 7, "7", 1) == "7/1", "spanische Platzhalter")
+check(DN.format_gueltig("W-{hoja}-{n:02}") and not DN.format_gueltig("W-{sheet}")
+      and not DN.format_gueltig("W-{{n}}") and not DN.format_gueltig("{n!s:.0}"),
+      "Format braucht einen echten Zähler")
+b = [L(0, y, 10, y) for y in range(0, 40, 10)]
+for fmt, start in (("W-{sheet}", 0), ("{n:.0e}", 8)):
+    try:
+        nummerieren([(0, b)], einstellung=dict(DN.STANDARD, format=fmt, start=start))
+    except DN.DrahtformatFehler:
+        check(not labels(b), "kein Teilplan für ein Format mit wiederholten Nummern")
+    else:
+        check(False, "Format mit wiederholten Nummern abgelehnt")
+b.append(core.Drahtnummer(5, 0, "02"))
+nummerieren([(0, b)], einstellung=dict(DN.STANDARD, format="{n:02}", start=1))
+check(sorted(l.inhalt for l in labels(b)) == ["01", "02", "03", "04"],
+      "vergebene Nummer wird übersprungen")
 
 # ---- PLC: wire to DI channel takes the address, also on the terminal side
 a1 = sps_di(0, 0, ["DI0.00", "0.01", "M", "I1.2"])

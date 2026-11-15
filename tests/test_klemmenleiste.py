@@ -25,7 +25,7 @@ def kl(x, y, leiste, num, **kw):
 
 
 # sheet 0 (objects): -X1 3, 1, PE, 2 ; sheet 1 (dicts): 1 drawn again, -X2
-s0 = [kl(0, 0, "-X1", "3"), kl(10, 0, "-X1", "1"), kl(20, 0, "-X1", "PE"), kl(30, 0, "-X1", "2"),
+s0 = [kl(0, 0, "-X1", "3"), kl(10, 0, "-X1", "1"), kl(20, 0, "-X1", "PE"), kl(30, 0, "", "2"),
       kl(40, 0, "-X1", "")]
 s1 = [kl(0, 0, "-X1", "1").to_dict(), kl(0, 0, "-X2", "1").to_dict()]
 blaetter = [(0, s0), (1, s1)]
@@ -34,6 +34,12 @@ rows = KL.zeilen(blaetter, "-X1")
 check([z["num"] for z in rows] == ["1", "2", "3", "PE", ""], f"Montagefolge nach Nummer: {[z['num'] for z in rows]}")
 check(rows[0]["anzahl"] == 2 and rows[0]["typ"] == "" and not rows[0]["trenn"], "doppelt gezeichnet = eine Zeile")
 check(KL.pruefen(rows) == [(4, "leer")], "Prüfung: leere Nummer")
+blatt_geerbt = [kl(0, 0, "-X1", "5").to_dict(), kl(10, 0, "IND", "6").to_dict()]
+rows_geerbt = KL.zeilen([(1, blatt_geerbt)], "-X1")
+check([z["num"] for z in rows_geerbt] == ["5", "6"], "geerbte Leiste im gespeicherten Blatt")
+rows_geerbt[1]["num"] = "7"
+check(KL.anwenden(rows_geerbt) == 1 and blatt_geerbt[1]["werte"]["NUM"] == "7"
+      and blatt_geerbt[1]["werte"]["IND"] == "IND", "geerbte Klemme wird gespeichert")
 
 # ---- edit: PE between 1 and 2, type for all, jumper 1-PE top, plate after 3
 rows = [rows[0], rows[3], rows[1], rows[2], rows[4]]
@@ -82,7 +88,7 @@ check(s0[0].werte["NUM"] == "01" and s1[0]["werte"]["NUM"] == "02" and s0[2].mon
 plan = KN.planen(blaetter, {"-X1"}, {"reihenfolge": "bestehend", "buchstaben_behalten": False})
 check([p[1] for p in plan] == ["01", "02", "PE", "03", "04"], f"bestehend = Montagefolge {[p[1] for p in plan]}")
 KN.anwenden(KN.planen(blaetter, {"-X1"}, {"reihenfolge": "bestehend"}))
-check(all(k.montage is None for k in s0 if k.werte["IND"] == "-X1") and "montage" not in s1[0],
+check(all(k.montage is None for k in s0) and "montage" not in s1[0],
       "Neunummerieren löscht die Position")
 
 # ---- targets from the terminal diagram rows

@@ -29,14 +29,15 @@ def nums(liste):
 # sheet 0: a vertical column of -X1 (top to bottom 7, 3, 9), PE, a second column, -X2
 a, b, c = kl(0, 0, "-X1", "7"), kl(0, -10, "-X1", "3"), kl(0, -20, "-X1", "9")
 pe = kl(0, -30, "-X1", "PE")
-d = kl(20, 0, "-X1", "")
+d = kl(20, 0, "", "")
 x2 = kl(50, 0, "-X2", "5")
 blatt0 = [a, b, c, pe, d, x2, core.Linie(0, 0, 1, 1)]
 # sheet 1 on disk: terminal 3 drawn again, and a new one
-blatt1 = [kl(0, 0, "-X1", "3").to_dict(), kl(10, 0, "-X1", "12").to_dict()]
+blatt1 = [kl(0, 0, "-X1", "3").to_dict(), kl(10, 0, "IND", "12").to_dict()]
 blaetter = [(0, blatt0), (1, blatt1)]
 
 check(KN.leisten(blaetter) == {"-X1": 7, "-X2": 1}, f"Leisten {KN.leisten(blaetter)}")
+check(KN.gewaehlte_leisten(blatt0, [d, x2]) == ["-X1", "-X2"], "Leiste ab Auswahl erben")
 check(KN.format_gueltig("{n:02}") and not KN.format_gueltig("X") and not KN.format_gueltig("{m}"),
       "Format prüfen")
 
@@ -65,6 +66,7 @@ n = KN.anwenden(plan)
 check(nums([a, b, c, pe, d]) == ["1", "2", "3", "PE", "4"] and nums(blatt1) == ["2", "5"],
       f"angewendet: {nums([a, b, c, pe, d])} {nums(blatt1)}")
 check(n == 6 and x2.werte["NUM"] == "5", f"geänderte Klemmen {n}, -X2 unverändert")
+check(d.werte["IND"] == "" and blatt1[1]["werte"]["IND"] == "IND", "IND bleibt geerbt")
 check(KN.anwenden(KN.planen(blaetter, {"-X1"})) == 0, "zweiter Lauf ändert nichts")
 
 # ---- app

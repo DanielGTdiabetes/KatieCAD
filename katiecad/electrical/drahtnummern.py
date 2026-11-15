@@ -33,6 +33,7 @@ Placeholders of the format: {sheet} / {hoja}, {sheetname} / {nombre}, {n}
 import math
 import re
 from collections import defaultdict
+from string import Formatter
 
 from katiecad.model.core import Leitung, Drahtnummer, BlockReferenz, ist_einpolig
 
@@ -40,6 +41,10 @@ STANDARD = {"format": "{sheet}{n:02}", "start": 0, "sps": True, "potenzial": Tru
             "hoehe": 2.5, "je_ast": True}
 LAGE_TOL = 0.3          # mm: label insertion point -> wire
 ARTEN_SPS = ("DI", "DO", "AI", "AO")
+
+
+class DrahtformatFehler(ValueError):
+    """The wire number format could not yield a free number."""
 
 
 def einstellungen(doku):
@@ -57,13 +62,28 @@ def einstellungen(doku):
     return e
 
 
+def _format_werte(sheet, sheetname, n):
+    return {"sheet": sheet, "hoja": sheet, "sheetname": sheetname,
+            "nombre": sheetname, "n": n}
+
+
+def format_gueltig(fmt, start=0):
+    """The format must render an actual, varying counter field."""
+    try:
+        if not any(feld == "n" for _, feld, _, _ in Formatter().parse(fmt)):
+            return False
+        return (fmt.format(**_format_werte(1, "Blatt", start))
+                != fmt.format(**_format_werte(1, "Blatt", start + 1)))
+    except (AttributeError, IndexError, KeyError, OverflowError, TypeError, ValueError):
+        return False
+
+
 def format_text(fmt, sheet, sheetname, n):
     """'{sheet}.{n}' -> '3.12'. Invalid formats fall back to the default."""
-    werte = {"sheet": sheet, "hoja": sheet, "sheetname": sheetname,
-             "nombre": sheetname, "n": n}
+    werte = _format_werte(sheet, sheetname, n)
     try:
         return str(fmt or STANDARD["format"]).format(**werte)
-    except (KeyError, IndexError, ValueError):
+    except (AttributeError, IndexError, KeyError, OverflowError, TypeError, ValueError):
         return STANDARD["format"].format(**werte)
 
 
@@ -387,14 +407,21 @@ def planen(blaetter, netz, sheet_nr=None, sheet_name=None, einstellung=None,
     offen.sort(key=lambda d: (reihenfolge.get(d.blaetter()[0], 0),
                               _sortierschluessel(d, d.blaetter()[0])))
     start = int(e.get("start", STANDARD["start"]) or 0)
+    fmt = str(e.get("format") or STANDARD["format"])
+    if offen and not format_gueltig(fmt, start):
+        raise DrahtformatFehler(fmt)
     zaehler = defaultdict(lambda: start - 1)
     for d in offen:
         b = d.blaetter()[0]
-        while True:
+        nr, name = sheet_nr(b), sheet_name(b)
+        # A unique counter format can skip at most one value per reserved label.
+        for _ in range(len(vergeben) + 1):
             zaehler[b] += 1
-            t = format_text(e.get("format"), sheet_nr(b), sheet_name(b), zaehler[b])
+            t = format_text(fmt, nr, name, zaehler[b])
             if t not in vergeben:
                 break
+        else:
+            raise DrahtformatFehler(fmt)
         d.nummer = t
         vergeben.add(t)
 

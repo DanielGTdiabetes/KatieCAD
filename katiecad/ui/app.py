@@ -11907,8 +11907,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self.status.set(tr("msg.kln.keine_leisten"))
             return
         leisten = [(n, anzahl[n]) for n in sorted(anzahl, key=KN.natuerlich)]
-        gewaehlt = sorted({KN._wert(w.get("IND"), "IND") for w, _x, _y in KN.klemmen(self.auswahl)}
-                          - {""}, key=KN.natuerlich) or [n for n, _z in leisten]
+        gewaehlt = (sorted(set(KN.gewaehlte_leisten(self.elemente, self.auswahl)), key=KN.natuerlich)
+                    or [n for n, _z in leisten])
         quelle = p.doku if p is not None else getattr(self, "_kln_einst", {})
         vorgabe = dict(KN.STANDARD, **quelle.get("klemmen_nummern", {}))
 
@@ -11987,7 +11987,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         if not leisten:
             self.status.set(tr("msg.kln.keine_leisten"))
             return
-        gewaehlt = [KN._wert(w.get("IND"), "IND") for w, _x, _y in KN.klemmen(self.auswahl)]
+        gewaehlt = KN.gewaehlte_leisten(self.elemente, self.auswahl)
         start = next((n for n in gewaehlt if n in leisten), leisten[0])
         ziele = self._klemmen_ziele()
         dlg = KlemmenleisteDialog(self.root, leisten, start,
@@ -12029,10 +12029,6 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             return
         r = dlg.result
         einst = {k: r.get(k, vorgabe[k]) for k in DN.STANDARD}
-        if p is not None:
-            p.doku["drahtnummern"] = einst
-        else:
-            self._draht_einst = {"drahtnummern": einst}
         self._einpolig_sync()
         if p is not None and not self._blatt_sichern():
             return
@@ -12045,11 +12041,19 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             leitungen_automatisch(self.elemente)
             blaetter = [(p.aktiv if p is not None else 0, self.elemente)]
         netz = SEI.netz_aufbauen(blaetter)
-        plan = DN.planen(
-            blaetter, netz,
-            sheet_nr=lambda i: i + 1,
-            sheet_name=(lambda i: p.blaetter[i].name) if p is not None else None,
-            einstellung=einst, neu_nummerieren=r["neu"])
+        try:
+            plan = DN.planen(
+                blaetter, netz,
+                sheet_nr=lambda i: i + 1,
+                sheet_name=(lambda i: p.blaetter[i].name) if p is not None else None,
+                einstellung=einst, neu_nummerieren=r["neu"])
+        except DN.DrahtformatFehler:
+            messagebox.showerror(tr("dlg.draht.titel"), tr("dlg.draht.format_fehler"), parent=self.root)
+            return
+        if p is not None:
+            p.doku["drahtnummern"] = einst
+        else:
+            self._draht_einst = {"drahtnummern": einst}
         if plan.anzahl == 0:
             self.status.set(tr("msg.draht.nichts", n=len(plan.draehte)))
             return

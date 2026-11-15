@@ -1,6 +1,7 @@
 # Änderungen
 
 ## Unveröffentlicht
+- Fix: Die Drahtnummerierung weist Zählformate ohne eindeutige Nummern zurück, Klemmenlisten erben das Leistenkennzeichen des Schaltplans und gleichnamige 3D-Quellen erhalten getrennte Cache-Dateien.
 - Fix: **SPS-Symbole** (`symbols/10 PLC`) haben ihre unsichtbaren Attribute zurück (SPS-Art, Station, Steckplatz, Symbol/Kommentar je Kanal) – die SPS-Liste war mit den neu gezeichneten Symbolen leer. Werkzeug `tools/plc_attribute_ergaenzen.py` (ergänzt nur Fehlendes, auch für eigene Symbolordner)
 - Fix: Protokolldatei: unter Windows wurde die vorige Datei nicht zu `.old` umbenannt (sie war noch offen)
 - Neu: **Klemmenleiste bearbeiten** (*Projekt › Klemmenleiste bearbeiten…*, `KLEMMENLEISTE` / `REGLETA`), wie der Klemmenleisteneditor von EPLAN: Tabelle einer Leiste in Montagereihenfolge mit Nummer, Typ, Hersteller, Funktion, Ziel oben/unten, **Brücke zur nächsten Klemme** (oben, unten, beide) und Trennplatte; Klemmen nach oben/unten schieben, in Tabellenfolge nummerieren, nach Nummer sortieren, Felder für mehrere Klemmen auf einmal setzen. Die Änderungen gehen an alle Zeichnungen der Klemme auf allen Blättern. Neu am Klemmenobjekt: `bruecke` (gespeicherte Brücke, erscheint in Klemmenplan und Leistenbild wie eine verdrahtete) und `montage` (Montageposition, nur wenn sie von der Nummernfolge abweicht – so kann z. B. PE zwischen 3 und 4 sitzen). *Klemmenleisten neu nummerieren* mit „bisherige Reihenfolge“ folgt dieser Position, nach Lage löscht es sie

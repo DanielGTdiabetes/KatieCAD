@@ -21,6 +21,9 @@ Works on element objects (open sheet) and on the plain dicts of the JSON sheet f
 """
 
 import re
+from types import SimpleNamespace
+
+from katiecad.reports.netz import leisten_ermitteln
 
 STANDARD = {"format": "{n}", "start": 1, "schritt": 1, "reihenfolge": "spalten",
             "buchstaben_behalten": True}
@@ -51,12 +54,29 @@ def klemmen(elemente, mit_element=False):
     return out
 
 
+def klemmen_mit_leiste(elemente):
+    """Resolved strip and original element for each terminal on a sheet."""
+    daten = klemmen(elemente, True)
+    klemmen_objekte = [SimpleNamespace(werte=w, x=x, y=y) if isinstance(el, dict) else el
+                       for w, x, y, el in daten]
+    zuordnung = leisten_ermitteln(klemmen_objekte)
+    for klemme, (w, x, y, el) in zip(klemmen_objekte, daten):
+        yield zuordnung[id(klemme)], w, x, y, el
+
+
+def gewaehlte_leisten(elemente, auswahl):
+    """Resolve the selection using the full sheet, in selection order."""
+    if not auswahl:
+        return []
+    zuordnung = {id(el): leiste for leiste, _, _, _, el in klemmen_mit_leiste(elemente)}
+    return [zuordnung[id(el)] for el in auswahl if zuordnung.get(id(el))]
+
+
 def leisten(blaetter):
     """{strip: number of terminals} of the project (terminals without strip left out)."""
     out = {}
     for _b, elemente in blaetter:
-        for w, _x, _y in klemmen(elemente):
-            ind = _wert(w.get("IND"), "IND")
+        for ind, _, _, _, _ in klemmen_mit_leiste(elemente):
             if ind:
                 out[ind] = out.get(ind, 0) + 1
     return out
@@ -107,8 +127,7 @@ def planen(blaetter, auswahl, einstellung=None):
     reihe = {b: i for i, (b, _el) in enumerate(blaetter)}
     gruppen = {}                       # strip -> {key: [sortkey, old, [werte]]}
     for b, elemente in blaetter:
-        for w, x, y, el in klemmen(elemente, True):
-            leiste = _wert(w.get("IND"), "IND")
+        for leiste, w, x, y, el in klemmen_mit_leiste(elemente):
             if not leiste or (auswahl is not None and leiste not in auswahl):
                 continue
             alt = _wert(w.get("NUM"), "NUM")

@@ -1,6 +1,7 @@
 # Changes
 
 ## Unreleased
+- Fix: Wire numbering rejects formats that cannot produce unique numbers, terminal renumbering and editing include inherited strip names, and 3D sources with the same filename use separate cache files.
 - Fix: **PLC symbols** (`symbols/10 PLC`) have their invisible attributes back (PLC kind, station, slot, symbol/comment per channel) - the PLC list was empty with the redrawn symbols. Tool `tools/plc_attribute_ergaenzen.py` (only adds what is missing, also for own symbol folders)
 - Fix: log file: on Windows the previous file was not renamed to `.old` (it was still open)
 - New: **Edit terminal strip** (*Project > Edit terminal strip...*, `TERMINALSTRIP` / `REGLETA`), like EPLAN's terminal strip editor: a table of one strip in mounting order with number, type, manufacturer, function, target top/bottom, **jumper to the next terminal** (top, bottom, both) and partition plate; move terminals up/down, number in table order, sort by number, set fields of several terminals at once. Changes go to every drawing of the terminal on every sheet. New on the terminal object: `bruecke` (stored jumper, shown in the terminal diagram and strip graphic like a wired one) and `montage` (mounting position, only when it differs from the order of the numbers - so PE can sit between 3 and 4). *Renumber terminal strips* with "keep the present order" follows that position, by position it clears it
