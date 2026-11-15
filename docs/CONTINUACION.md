@@ -308,7 +308,12 @@ Comprobado en su README y documentación (noviembre de 2026):
    Inconvenientes: dos programas; SolidCraft en beta; el armario 3D de KatieCAD (vistas en
    presentaciones) quedaría para vistas sencillas o se sustituiría por vistas exportadas.
 
-#### Prueba de concepto (15-11-2026) – `tools/solidcraft_poc/`
+#### Prueba de concepto (15-11-2026) – ahora en el proyecto `cuadro3d`
+
+> La prueba se hizo en `tools/solidcraft_poc/` (commit `1840ea9`) y se ha sacado a un proyecto
+> propio, `E:\projects\cuadro3d` (de esquema eléctrico a armario 3D; lector QElectroTech,
+> montaje neutro, escritor SolidCraft, tests). KatieCAD solo necesitaría un exportador de
+> `montaje.json` (formato en `cuadro3d/montaje.py`).
 
 SolidCraft instalado por el usuario en `D:\SolidCraft` (`solidcraft-cli 0.41.0`, 642 comandos;
 la última publicada es 0.42.0). Montaje neutro `montaje.json` → `montaje_a_solidcraft.py` →
@@ -336,7 +341,7 @@ script → `solidcraft-cli run … --save cuadro.sc --out cuadro.step`. Resultad
   sin modelo). Registrarlo: `solidcraft-cli mcp setup --client claude-code` (cambia la
   configuración de Claude Code, pedir permiso antes).
 
-**Pasarela desde QElectroTech (15-11-2026):** `tools/solidcraft_poc/qet_a_montaje.py` lee un
+**Pasarela desde QElectroTech (15-11-2026):** `qet_a_montaje.py` (hoy `cuadro3d/lectores/qet.py`) lee un
 `.qet` (XML: `diagram` > `element` > `elementInformation` `label`, `manufacturer`,
 `designation`, `description`), quita duplicados por etiqueta (unifilar y desarrollado, contactos
 esclavos), busca medidas/STEP en un catálogo por referencia (`catalogo_hager.json`; el cofre se

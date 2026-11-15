@@ -1,9 +1,0 @@
-lib/
-*.sc
-*.step
-*.dxf
-bom.csv
-cuadro_script.json
-qet_bom.csv
-qet_script.json
-montaje_qet.json

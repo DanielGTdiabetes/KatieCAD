@@ -1,6 +1,0 @@
-[
- {"command":"solid.box","params":{"length":18,"width":70,"height":90,"corner":[0,-70,0],"body_name":"iC60N_C16"}},
- {"command":"solid.box","params":{"length":8,"width":15,"height":20,"corner":[5,-85,35],"body_name":"Maneta"}},
- {"command":"solid.combine","params":{"target":"iC60N_C16","tools":["Maneta"],"operation":"join"}},
- {"command":"file.export","params":{"path":"lib/iC60N_C16.step"}}
-]
