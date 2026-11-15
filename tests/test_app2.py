@@ -70,7 +70,7 @@ a._ist_layout = lambda: False
 # ---------- Place a T-junction on an off-grid wire ----------
 a = make()
 a.elemente = [core.Leitung(0, 12, 30, 12)]
-A.VerbindungsformDialog = lambda _parent: NS(
+A.VerbindungsformDialog = lambda _parent, _form=None: NS(
     erweitert=False, result={"arme": [0, 90, 180], "punkt": True, "ausrichtung": 0})
 a._verbindung_starten()
 a._eingabepunkt = lambda _event: (15, 10)

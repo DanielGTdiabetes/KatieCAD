@@ -157,6 +157,10 @@ def _zeichne(name, d, c, f):
         L([(8, 50), (36, 50)]); L([(64, 50), (92, 50)])
     elif name == "verbindung":
         L([(10, 50), (90, 50)]); L([(50, 10), (50, 90)]); P(50, 50, 13)
+    elif name == "verbindung_ecke":
+        L([(23, 16), (23, 77), (84, 77)], 10)
+    elif name == "verbindung_abzweig":
+        L([(12, 73), (88, 73)], 8); L([(50, 18), (50, 73)], 8); P(50, 73, 13)
     elif name == "querverweis":
         L([(8, 50), (58, 50)])
         d.polygon([(58 * f, 28 * f), (92 * f, 50 * f), (58 * f, 72 * f)], fill=c)
@@ -305,7 +309,7 @@ def _zeichne(name, d, c, f):
 
 NAMEN = ("auswahl", "linie", "polylinie", "kreis", "bogen", "ellipse", "spline",
          "rechteck", "text", "bemassung", "stutzen", "brechen", "wand", "tuer", "fenster", "durchbruch", "wandverb", "raum", "kanal", "kanalverb",
-         "vpunkt", "verbindung", "querverweis", "maske", "klemme", "kabel",
+         "vpunkt", "verbindung", "verbindung_ecke", "verbindung_abzweig", "querverweis", "maske", "klemme", "kabel",
          "koordinatenfeld", "suchen", "zoom_plus", "zoom_minus",
          "zoom_grenzen", "reset", "ftext", "laenge", "manip",
          "ansicht3d", "wuerfel", "k_quader", "k_schrank", "k_zylinder", "k_kegel", "k_pyramide",

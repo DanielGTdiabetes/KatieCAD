@@ -4262,31 +4262,116 @@ class KoordinatenfeldDialog(tk.Toplevel):
         self.destroy()
 
 
+class ToolbarKnopfDialog(tk.Toplevel):
+    """Show, hide and order buttons of a symbol toolbar."""
+
+    def __init__(self, parent, titel, eintraege, reihe, ausgeblendet):
+        super().__init__(parent)
+        self.result = None
+        self._namen = dict(eintraege)
+        self._reihe = list(reihe)
+        self._ausgeblendet = set(ausgeblendet)
+        self.title(tr("dlg.tbknopf.titel", name=titel))
+        self.transient(parent)
+        _modal(self)
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        liste = ttk.Frame(f)
+        liste.pack(fill=tk.BOTH, expand=True)
+        self.baum = ttk.Treeview(liste, columns=("name", "sichtbar"), show="headings",
+                                 height=min(12, len(eintraege)), selectmode="browse")
+        self.baum.heading("name", text=tr("dlg.tbknopf.knopf"))
+        self.baum.heading("sichtbar", text=tr("dlg.tbknopf.sichtbar"))
+        self.baum.column("name", width=300)
+        self.baum.column("sichtbar", width=80, stretch=False, anchor=tk.CENTER)
+        scroll = ttk.Scrollbar(liste, orient=tk.VERTICAL, command=self.baum.yview)
+        self.baum.configure(yscrollcommand=scroll.set)
+        self.baum.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.baum.bind("<Double-Button-1>", lambda e: self._umschalten(self.baum.identify_row(e.y)))
+        self.baum.bind("<space>", lambda _e: self._umschalten())
+        bf = ttk.Frame(f)
+        bf.pack(fill=tk.X, pady=(8, 6))
+        ttk.Button(bf, text=tr("dlg.tbknopf.umschalten"), command=self._umschalten).pack(side=tk.LEFT, padx=2)
+        ttk.Button(bf, text=tr("dlg.tbknopf.hoch"), command=lambda: self._verschieben(-1)).pack(side=tk.LEFT, padx=2)
+        ttk.Button(bf, text=tr("dlg.tbknopf.runter"), command=lambda: self._verschieben(1)).pack(side=tk.LEFT, padx=2)
+        unten = ttk.Frame(f)
+        unten.pack(fill=tk.X)
+        ttk.Button(unten, text=tr("dlg.tbknopf.standard"), command=self._standard).pack(side=tk.LEFT, padx=2)
+        ttk.Button(unten, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(unten, text=tr("dlg.ok"), command=self._ok).pack(side=tk.RIGHT, padx=2)
+        self.bind("<Escape>", lambda _e: self.destroy())
+        self._anzeigen()
+        _zentrieren(self, parent)
+        self.wait_window(self)
+
+    def _auswahl(self):
+        return next(iter(self.baum.selection()), None)
+
+    def _anzeigen(self, auswahl=None):
+        self.baum.delete(*self.baum.get_children())
+        for key in self._reihe:
+            sichtbar = tr("dlg.nein" if key in self._ausgeblendet else "dlg.ja")
+            self.baum.insert("", "end", iid=key, values=(self._namen[key], sichtbar))
+        key = auswahl or next(iter(self._reihe), None)
+        if key:
+            self.baum.selection_set(key)
+            self.baum.focus(key)
+            self.baum.see(key)
+
+    def _umschalten(self, key=None):
+        key = self._auswahl() if key is None else key
+        if key:
+            self._ausgeblendet.symmetric_difference_update((key,))
+            self._anzeigen(key)
+        return "break"
+
+    def _verschieben(self, schritt):
+        key = self._auswahl()
+        if key is not None:
+            i = self._reihe.index(key)
+            j = i + schritt
+            if 0 <= j < len(self._reihe):
+                self._reihe[i], self._reihe[j] = self._reihe[j], self._reihe[i]
+                self._anzeigen(key)
+
+    def _standard(self):
+        self._reihe = list(self._namen)
+        self._ausgeblendet.clear()
+        self._anzeigen()
+
+    def _ok(self):
+        self.result = self._reihe, self._ausgeblendet
+        self.destroy()
+
+
 class VerbindungsformDialog(tk.Toplevel):
     """Choose a corner or T-junction, ready to place in the schematic."""
 
-    FORMEN = (
-        ("dlg.verb.ecken", ((90, 0), (90, 180), (270, 0), (270, 180))),
-        ("dlg.verb.abzweige", ((180, 0, 90), (180, 0, 270),
-                               (90, 270, 0), (90, 270, 180))),
-    )
+    FORMEN = {
+        "ecke": ("dlg.verb.ecken", ((90, 0), (90, 180), (270, 0), (270, 180))),
+        "abzweig": ("dlg.verb.abzweige", ((180, 0, 90), (180, 0, 270),
+                                         (90, 270, 0), (90, 270, 180))),
+    }
     PFEILE = {90: "↑", 0: "→", 270: "↓", 180: "←"}
     ARME_BILD = {90: (24, 5, 28, 22), 0: (24, 18, 44, 22),
                  270: (24, 18, 28, 35), 180: (8, 18, 28, 22)}
 
-    def __init__(self, parent):
+    def __init__(self, parent, form=None):
         super().__init__(parent)
         self.result = None
         self.erweitert = False
-        self.title(tr("dlg.verb.formen"))
+        self.title(tr(self.FORMEN[form][0] if form else "dlg.verb.formen"))
         self.transient(parent)
         self.resizable(False, False)
         _modal(self)
         f = ttk.Frame(self, padding=14)
         f.pack(fill=tk.BOTH, expand=True)
         self._bilder = []
-        for titel, formen in self.FORMEN:
-            ttk.Label(f, text=tr(titel), style="Title.TLabel").pack(anchor=tk.W, pady=(4, 2))
+        gruppen = (self.FORMEN[form],) if form else self.FORMEN.values()
+        for titel, formen in gruppen:
+            if not form:
+                ttk.Label(f, text=tr(titel), style="Title.TLabel").pack(anchor=tk.W, pady=(4, 2))
             reihe = ttk.Frame(f)
             reihe.pack(fill=tk.X, pady=(0, 8))
             for arme in formen:
@@ -4300,7 +4385,8 @@ class VerbindungsformDialog(tk.Toplevel):
                   wraplength=320, justify=tk.LEFT).pack(anchor=tk.W, pady=(2, 8))
         bf = ttk.Frame(f)
         bf.pack(fill=tk.X)
-        ttk.Button(bf, text=tr("dlg.verb.erweitert"), command=self._erweitert).pack(side=tk.LEFT)
+        if not form:
+            ttk.Button(bf, text=tr("dlg.verb.erweitert"), command=self._erweitert).pack(side=tk.LEFT)
         ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.RIGHT)
         self.bind("<Escape>", lambda _e: self.destroy())
         _zentrieren(self, parent)

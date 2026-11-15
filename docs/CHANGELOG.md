@@ -1,6 +1,7 @@
 # Änderungen
 
 ## Unveröffentlicht
+- Neu: Die Elektroleiste bietet getrennte Schaltflächen für 90°-Ecken und T-Abzweige. Unter Ansicht › Werkzeugleisten lassen sich Schaltflächen jeder Symbolleiste ein- und ausblenden sowie umsortieren.
 - Neu: 90°-Ecken und T-Abzweige im Elektromenü anhand der Symbole wählen. Ein T-Abzweig rastet auf vorhandenen Leitungen ein. Fanganzeigen und Standardnamen für Blätter und Layouts folgen der Oberflächensprache.
 - Fix: Rahmen und Schriftkopf lassen sich aus der Modellansicht einfügen. Die App öffnet und zentriert das Layout und schlägt zunächst eine Vorlage für Papierformat und Oberflächensprache vor.
 - Fix: Die Drahtnummerierung weist Zählformate ohne eindeutige Nummern zurück, Klemmenlisten erben das Leistenkennzeichen des Schaltplans und gleichnamige 3D-Quellen erhalten getrennte Cache-Dateien.

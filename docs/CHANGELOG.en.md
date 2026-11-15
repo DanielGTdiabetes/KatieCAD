@@ -1,6 +1,7 @@
 # Changes
 
 ## Unreleased
+- New: The Electrical toolbar has separate 90° corner and T-junction shortcuts. Use View > Toolbars to show, hide or reorder buttons in each symbol toolbar.
 - New: Pick 90° corners and T-junctions visually from the Electrical menu. A T-junction snaps onto an existing wire. Snap indicators and default sheet and layout names follow the interface language.
 - Fix: Frame and title block can be inserted from Model. The app opens and fits the layout, and initially suggests a template for its paper size and interface language.
 - Fix: Wire numbering rejects formats that cannot produce unique numbers, terminal renumbering and editing include inherited strip names, and 3D sources with the same filename use separate cache files.

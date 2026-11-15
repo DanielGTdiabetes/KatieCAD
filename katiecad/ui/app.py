@@ -103,7 +103,7 @@ from katiecad.ui.dialogs import (
     ProjektNeuDialog, AttributDefinitionDialog, BlockAttributeDialog,
     MasstextDialog, WandDialog, KanalDialog, OeffnungDialog, RaumDialog, BauteilkatalogDialog, SchnellauswahlDialog, SuchenErsetzenDialog, QuerverweisDialog, PruefungDialog, EigenschaftenPalette, VerbindungspunkteDialog, ProjektDruckDialog,
     VerbindungspunktDialog, VerbindungDialog, FestMaskeDialog,
-    KoordinatenfeldDialog, VerbindungsformDialog,
+    KoordinatenfeldDialog, VerbindungsformDialog, ToolbarKnopfDialog,
     TitleBlockDialog, DokumentationDialog, ListenAuswahlDialog, MPrintDialog, VersatzDialog, SchriftenDialog, ProjektEigenschaftenDialog,
 )
 from katiecad.reports import seiten as SEI, anwenden as ANW
@@ -1416,6 +1416,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                             command=lambda n=_name: self.toolbar_verschieben(n, -1))
             m_n.add_command(label=tr("menu.ansicht.tb_zurueck"),
                             command=lambda n=_name: self.toolbar_verschieben(n, 1))
+            m_n.add_command(label=tr("menu.ansicht.tb_anpassen"),
+                            command=lambda n=_name: self.toolbar_anpassen(n))
             m_tb.add_cascade(label=tr("menu.ansicht.tb_" + _name), menu=m_n)
         m_ansicht.add_cascade(label=tr("menu.ansicht.tb"), menu=m_tb)
         m_ansicht.add_command(label=tr("menu.ansicht.zoom_grenzen"),
@@ -1638,8 +1640,16 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         Tooltip(griff, tr("tb.griff"))
         self._toolbar_griff_binden(griff, name)
 
+    def toolbar_anpassen(self, name):
+        reihe, ausgeblendet = self.toolbar_knopf_optionen(name)
+        dlg = ToolbarKnopfDialog(self.root, tr("menu.ansicht.tb_" + name),
+                                 self.toolbar_eintraege(name), reihe, ausgeblendet)
+        if dlg.result is not None:
+            self.toolbar_knopf_optionen_setzen(name, *dlg.result)
+
     def _build_toolbars(self):
         self._wz_knoepfe = {}
+        self._tb_info = {}
         for attr in ("tb1", "tbB", "tbE", "tbD", "tb2", "tb3"):
             if not hasattr(self, attr):
                 frm = ttk.Frame(self.root, padding=4)
@@ -1677,7 +1687,11 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self._leisten_griff(tb, "elektro")
         ttk.Label(tb, text=tr("menu.elektro") + ":",
                   style="Elektro.TLabel").pack(side=tk.LEFT, padx=(0, 4))
-        for key in ("vpunkt", "verbindung", "querverweis",
+        self._werkzeug_knopf(tb, "vpunkt", ICON_ROT)
+        for form in ("ecke", "abzweig"):
+            self._befehl_knopf(tb, "verbindung_" + form, ICON_ROT,
+                               lambda f=form: self._verbindungswerkzeug(f))
+        for key in ("verbindung", "querverweis",
                     "klemme", "kabel", "koordinatenfeld", "ftext", "maske"):
             self._werkzeug_knopf(tb, key, ICON_ROT)
 
@@ -2133,6 +2147,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                                 variable=self.aktives_werkzeug,
                                 command=self._werkzeug_toolbar)
             b.pack(side=tk.LEFT)
+            b._toolbar_eintrag = (key, text)
             self._wz_knoepfe[key] = b
             return
         if not hasattr(self, "_toolbar_icons"):
@@ -2142,6 +2157,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                             variable=self.aktives_werkzeug,
                             command=self._werkzeug_toolbar)
         b.pack(side=tk.LEFT, padx=1)
+        b._toolbar_eintrag = (key, text)
         self._wz_knoepfe[key] = b
         Tooltip(b, text)
 
@@ -2157,8 +2173,9 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             except tk.TclError:
                 bild = None
         if bild is None:
-            ttk.Checkbutton(parent, text=text, variable=var, command=befehl
-                            ).pack(side=tk.LEFT, padx=1)
+            b = ttk.Checkbutton(parent, text=text, variable=var, command=befehl)
+            b.pack(side=tk.LEFT, padx=1)
+            b._toolbar_eintrag = (key, text)
             return
         if not hasattr(self, "_toolbar_icons"):
             self._toolbar_icons = {}
@@ -2166,6 +2183,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         b = ttk.Checkbutton(parent, image=bild, style="Icon.Toolbutton",
                             variable=var, command=befehl)
         b.pack(side=tk.LEFT, padx=1)
+        b._toolbar_eintrag = (key, text)
         Tooltip(b, text)
 
     def _befehl_knopf(self, parent, key, farbe, befehl, textkey=None):
@@ -2182,6 +2200,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         if bild is None:
             b = ttk.Button(parent, text=text, command=befehl)
             b.pack(side=tk.LEFT, padx=1)
+            b._toolbar_eintrag = (key, text)
             self._wz_knoepfe["cmd:" + key] = b
             return
         if not hasattr(self, "_toolbar_icons"):
@@ -2189,6 +2208,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self._toolbar_icons[(key, str(parent))] = bild
         b = ttk.Button(parent, image=bild, style="Icon.Toolbutton", command=befehl)
         b.pack(side=tk.LEFT, padx=1)
+        b._toolbar_eintrag = (key, text)
         self._wz_knoepfe["cmd:" + key] = b
         Tooltip(b, text)
 
@@ -2888,11 +2908,11 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self.redraw()
         self.status.set(tr("txt.0013"))
 
-    def _werkzeug_gewechselt(self):
-        self._werkzeug_gewechselt_2d()
+    def _werkzeug_gewechselt(self, verbindungsform=None):
+        self._werkzeug_gewechselt_2d(verbindungsform)
         self.ansicht3d_werkzeug()           # in 3D: basic tools act on the work plane
 
-    def _werkzeug_gewechselt_2d(self):
+    def _werkzeug_gewechselt_2d(self, verbindungsform=None):
         self._kabel_p1 = None
         self._leitung_beenden()
         self.letzter_punkt = None
@@ -2934,7 +2954,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             elif wz == "querverweis":
                 self._querverweis_starten()
             elif wz == "verbindung":
-                self._verbindung_starten()
+                self._verbindung_starten(verbindungsform)
             elif wz == "vpunkt":
                 self._vp_starten()
             elif wz == "maske":
@@ -11042,8 +11062,12 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         return px, py
 
     # Junction
-    def _verbindung_starten(self):
-        dlg = VerbindungsformDialog(self.root)
+    def _verbindungswerkzeug(self, form):
+        self.aktives_werkzeug.set("verbindung")
+        self._werkzeug_gewechselt(form)
+
+    def _verbindung_starten(self, form=None):
+        dlg = VerbindungsformDialog(self.root, form)
         if dlg.erweitert:
             dlg = VerbindungDialog(self.root, self._vb_vorgabe)
         if dlg.result is None:
