@@ -1,5 +1,5 @@
 {
-  "_hinweis": "Kabelkanal-Katalog / catálogo de canaleta. max_laenge = Länge einer Stange in mm (longitud de barra). Unex Canal 77: Referenzen aus der Unex BIM-Bibliothek (unex.net/es/bim). ANNAHME: Referenz = Höhe.Breite.77 (60.40.77 = 60 hoch x 40 breit) - bitte mit dem Unex-Katalog prüfen. SUPUESTO: referencia = alto.ancho.77; comprobar. Eine Kopie in <Projekt>/report_templates hat Vorrang.",
+  "_hinweis": "Kabelkanal-Katalog / catálogo de canaleta. max_laenge = Länge einer Stange in mm (longitud de barra). Unex Canal 77 aus der Unex BIM-Bibliothek (unex.net/es/bim): Referenz = Höhe.Breite.77, z. B. 60.40.77 = 60 hoch x 40 breit (referencia = alto.ancho.77, confirmado por el usuario). Eine Kopie in <Projekt>/report_templates hat Vorrang.",
   "max_laenge": 2000,
   "kanaele": [
     {

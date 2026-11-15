@@ -216,9 +216,8 @@ Pendiente para acercarse más: rótulo de canaleta en 3D, carriles DIN como elem
 
 **Catálogo Unex Canal 77** (`report_templates/kanal_katalog.json`): 25 medidas tomadas de la
 librería BIM de Unex (<https://www.unex.net/es/bim>, sección «Canal 77», archivos STEP
-`18.20.77` … `100.150.77`). **Supuesto sin confirmar:** referencia = alto.ancho.77. Para
-confirmarlo: descargar un STEP (p. ej. `60.40.77`) y medir su caja con OCP, o mirar el catálogo
-Unex. Los STEP de la canaleta también podrían usarse como modelo 3D real más adelante.
+`18.20.77` … `100.150.77`). Referencia = **alto.ancho.77** (confirmado por el usuario el
+15-11-2026: `60.40.77` = 60 de alto × 40 de ancho). Los STEP de la canaleta también podrían usarse como modelo 3D real más adelante.
 
 ### 4.5 Alternativa: conector con SolidCraft en lugar de ampliar el 3D propio
 

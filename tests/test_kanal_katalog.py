@@ -28,7 +28,7 @@ PROG = os.path.join(WURZEL, "report_templates")
 kat = KK.katalog_laden([PROG])
 check(kat["max_laenge"] == 2000 and len(kat["kanaele"]) >= 10, f"Programmkatalog: {len(kat['kanaele'])}")
 check(any(k["ref"] == "60.40.77" and k["breite"] == 40 and k["hoehe"] == 60 and k["hersteller"] == "Unex"
-          for k in kat["kanaele"]), "Unex 77: 60.40.77 = 40 breit x 60 hoch (Annahme alto.ancho)")
+          for k in kat["kanaele"]), "Unex 77: 60.40.77 = 40 breit x 60 hoch (alto.ancho)")
 check(len(kat["kanaele"]) == 25, "25 Größen der Serie 77")
 tmp = tempfile.mkdtemp()
 try:
