@@ -1595,8 +1595,11 @@ class Ansicht3D(tk.Frame):
         kd = {"art": art, "breite": breite, "hoehe": hoehe}
         if self.app._kanal_ref:
             kd["ref"] = self.app._kanal_ref
+        schiene = self.app._kanal_schiene and art == "gerade"
+        if schiene:
+            kd["schiene"] = True
         return Koerper3D("prisma", profil=punkte, z0=0.0, hoehe=hoehe, ebene=ebene,
-                         bez=tr("kanal.bez." + art), kanal=kd, **daten)
+                         bez=tr("kanal.bez." + ("schiene" if schiene else art)), kanal=kd, **daten)
 
     def _kanal_klick(self, e):
         """Each click after the first creates one straight duct piece (chain)."""
@@ -2249,6 +2252,10 @@ class Ansicht3D(tk.Frame):
             p = self._bodenpunkt(e, pl["z"])
         if p is None:
             return None, []
+        if pl.get("hut") is not None:                # device near a DIN rail: onto its axis
+            q = S.auf_hutschiene(self._sichtbare(), p, pl["hut"])
+            if q is not None:
+                return q
         if not self.app.osnap.get():
             return p, []
         mx, my = self._mitte()
@@ -2586,8 +2593,13 @@ class Ansicht3D(tk.Frame):
                 ref = (min(b[0] for b in bs), min(b[1] for b in bs), min(b[2] for b in bs))
             else:
                 ref = (0.0, 0.0, 0.0)
+        hut = None                       # DIN rail point of a device model, relative to ref
+        for x in vorlagen:
+            for q in (getattr(x, "netzdaten", None) or {}).get("fang", ()):
+                if q[3] == "hutschiene":
+                    hut = (q[0] - ref[0], q[1] - ref[1], q[2] - ref[2])
         self._platz = {"art": None, "par": None, "z": ref[2], "maus": None,
-                       "kopie": vorlagen, "ref": ref, "ebene_y": ebene_y}
+                       "kopie": vorlagen, "ref": ref, "ebene_y": ebene_y, "hut": hut}
         self.info_var.set(info or tr("d3.msg.kopie_platzieren"))
         self.zeichne()
 

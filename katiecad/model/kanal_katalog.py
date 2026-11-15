@@ -21,15 +21,16 @@ import os
 
 MAX_LAENGE = 2000.0
 DATEI = "kanal_katalog.json"
+DATEI_SCHIENE = "hutschienen.json"   # DIN rails: same format, drawn with the duct tool
 
 
-def katalog_laden(ordner=()):
+def katalog_laden(ordner=(), datei=DATEI):
     """-> {"max_laenge": float, "kanaele": [dict]} from the folders (later = higher
-    priority). Faulty files are ignored."""
+    priority). Faulty files are ignored. datei: DATEI (ducts) or DATEI_SCHIENE (DIN rails)."""
     out = {"max_laenge": MAX_LAENGE, "kanaele": []}
     for o in ordner:
         try:
-            with open(os.path.join(o, DATEI), "r", encoding="utf-8") as f:
+            with open(os.path.join(o, datei), "r", encoding="utf-8") as f:
                 d = json.load(f)
         except (OSError, ValueError):
             continue
@@ -91,12 +92,16 @@ def _stuecke(elemente):
 
     def nehmen(el):
         if isinstance(el, Kabelkanal):
-            out.append((el.art, el.breite, el.hoehe, getattr(el, "ref", ""), el.laenge()))
+            art = "schiene" if getattr(el, "schiene", False) and el.art == "gerade" else el.art
+            out.append((art, el.breite, el.hoehe, getattr(el, "ref", ""), el.laenge()))
         elif isinstance(el, Koerper3D) and el.kanal:
             kd = el.kanal
             m = kanal_aus_koerper(el)
             laenge = math.hypot(m[1][0] - m[0][0], m[1][1] - m[0][1]) if m else 0.0
-            out.append((kd.get("art", "gerade"), float(kd.get("breite") or 0.0),
+            art = kd.get("art", "gerade")
+            if kd.get("schiene") and art == "gerade":
+                art = "schiene"
+            out.append((art, float(kd.get("breite") or 0.0),
                         float(kd.get("hoehe") or abs(el.hoehe)), kd.get("ref", ""), laenge))
         elif isinstance(el, Gruppe3D):
             for t in el.teile:
@@ -107,26 +112,30 @@ def _stuecke(elemente):
     return out
 
 
-def kanalliste(blaetter, katalog=None):
+def kanalliste(blaetter, katalog=None, schienen_katalog=None):
     """One row per duct size / reference: rows {"ref", "hersteller", "masse", "art",
     "stueck", "laenge" (m), "stangen"} - straight pieces first (with the bars of
-    max_laenge needed), then the fittings (coupler, elbow, tee) as pieces."""
+    max_laenge needed), then the fittings (coupler, elbow, tee) as pieces. DIN rails
+    drawn with the duct tool appear as art "schiene" (manufacturer from schienen_katalog)."""
     kat = katalog or {"max_laenge": MAX_LAENGE, "kanaele": []}
     m = kat["max_laenge"]
     herst = {(round(e["breite"], 1), round(e["hoehe"], 1), e["ref"]): e["hersteller"]
-             for e in kat["kanaele"]}
+             for e in kat["kanaele"] + list((schienen_katalog or {}).get("kanaele", []))}
     gruppen = {}
     for _b, el in blaetter:
         for art, b, h, ref, laenge in _stuecke(el):
-            schl = (art != "gerade", art, round(b, 1), round(h, 1), ref)
+            # straight ducts and DIN rails (by the metre / bar) first, then fittings
+            schl = (art not in ("gerade", "schiene"), art, round(b, 1), round(h, 1), ref)
             z = gruppen.setdefault(schl, {"stueck": 0, "laenge": 0.0})
             z["stueck"] += 1
             z["laenge"] += laenge
     zeilen = []
+    m_schiene = (schienen_katalog or {}).get("max_laenge", m)
     for (form, art, b, h, ref), z in sorted(gruppen.items()):
+        mm = m_schiene if art == "schiene" else m
         zeilen.append({
             "ref": ref, "hersteller": herst.get((b, h, ref), ""),
             "masse": "%g x %g" % (b, h), "art": art, "stueck": str(z["stueck"]),
             "laenge": ("%.2f" % (z["laenge"] / 1000.0)) if not form else "",
-            "stangen": str(int(math.ceil(z["laenge"] / m - 1e-9))) if not form and m > 0 else ""})
+            "stangen": str(int(math.ceil(z["laenge"] / mm - 1e-9))) if not form and mm > 0 else ""})
     return zeilen

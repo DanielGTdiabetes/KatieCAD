@@ -150,7 +150,10 @@ puntos de captura definidos por el usuario y carril DIN (punto 7).
    incluirlos en `szene3d.fang_kandidaten` y en `_platz_pos` (el punto de enganche del equipo se
    engancha a la línea del carril).
 6. Tests: `tests/test_modell3d.py`
-7. **Carril DIN** (petición del usuario): elemento como la canaleta, en barras de **2 m como
+7. **HECHO (15-11-2026):** carril DIN (`Insert > Carril DIN`, modo carril de la herramienta de
+   canaleta, `report_templates/hutschienen.json`, `szene3d.auf_hutschiene`, test
+   `tests/test_hutschiene.py`). Falta: modelo 3D con sección en sombrero (hoy es una caja).
+   Diseño original: **Carril DIN** (petición del usuario): elemento como la canaleta, en barras de **2 m como
    máximo**, perfiles TS 35×7,5 y TS 35×15 (y TS 32, TS 15). El usuario tenía abierto el
    catálogo 3Dfindit de Weidmüller (carriles TS 35X15 2M, TS 35X7.5 2M …) como referencia de
    artículos y modelos. Reutilizar `model/kanal_katalog.py` (tope y partición en barras) con un

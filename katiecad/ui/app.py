@@ -1342,6 +1342,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                            command=lambda: self._werkzeug_aus_menue("raum"))
         m_einf.add_command(label=tr("menu.einfuegen.kanal"),
                            command=lambda: self._werkzeug_aus_menue("kanal"))
+        m_einf.add_command(label=tr("menu.einfuegen.schiene"), command=self.schiene_werkzeug)
         m_einf.add_command(label=tr("menu.einfuegen.kanalverb"),
                            command=lambda: self._werkzeug_aus_menue("kanalverb"))
         m_einf.add_separator()
@@ -5314,13 +5315,34 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
     _kanal_ausrichtung = "mitte"
     _kanal_ref = ""
     _kanal_max = None             # bar length (mm); None = from the catalogue
+    _kanal_schiene = False        # the duct tool draws DIN rails
+    _schiene_angefordert = False
+    _kanal_saetze = None          # remembered sizes per kind: {"kanal": (...), "schiene": (...)}
+
+    def schiene_werkzeug(self):
+        """Insert > DIN rail: the duct tool in rail mode (rail catalogue, bars of max. length)."""
+        self._schiene_angefordert = True
+        self._werkzeug_aus_menue("kanal")
+
+    def _kanal_satz_wechseln(self, schiene):
+        """Keeps the sizes of ducts and rails apart when switching between them."""
+        saetze = self._kanal_saetze or {"kanal": (60.0, 40.0, "", None),
+                                         "schiene": (35.0, 7.5, "", None)}
+        alt = "schiene" if self._kanal_schiene else "kanal"
+        saetze[alt] = (self._kanal_breite, self._kanal_hoehe, self._kanal_ref, self._kanal_max)
+        neu = "schiene" if schiene else "kanal"
+        self._kanal_breite, self._kanal_hoehe, self._kanal_ref, self._kanal_max = saetze[neu]
+        self._kanal_saetze = saetze
+        self._kanal_schiene = bool(schiene)
 
     def _kanal_katalog(self):
-        """Duct catalogue of the program and the project (report_templates/kanal_katalog.json)."""
-        from katiecad.model.kanal_katalog import katalog_laden
+        """Duct catalogue (report_templates/kanal_katalog.json) or, in rail mode, the DIN rail
+        catalogue (hutschienen.json) of the program and the project."""
+        from katiecad.model.kanal_katalog import katalog_laden, DATEI, DATEI_SCHIENE
         programm = os.path.dirname(TB.program_folder())
         p = getattr(self, "projekt", None)
-        return katalog_laden(SEI.spalten_ordner(programm, p.ordner if p else None))
+        return katalog_laden(SEI.spalten_ordner(programm, p.ordner if p else None),
+                             DATEI_SCHIENE if self._kanal_schiene else DATEI)
 
     def _mechanik_vorlagen(self):
         """Machining templates of the program and the project (report_templates/mecanizado.json)."""
@@ -5358,14 +5380,18 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         return daten
 
     def _kanal_werkzeug_start(self):
-        """Cable duct tool selected: ask width (3D: and height), create the layer."""
+        """Cable duct tool selected: ask width (3D: and height), create the layer.
+        Started from Insert > DIN rail it draws rails (own catalogue and sizes)."""
+        self._kanal_satz_wechseln(self._schiene_angefordert)
+        self._schiene_angefordert = False
         self._kanal_layer_sicherstellen()
         mit_hoehe = self.ansicht3d_aktiv() and not self._ist_layout()
         dlg = KanalDialog(self.root, self._kanal_breite, self._kanal_hoehe, mit_hoehe=mit_hoehe,
                           ausrichtung=self._kanal_ausrichtung, schraffur=self._kanal_schraffur,
                           schraffur_abstand=self._kanal_schraffur_abstand,
                           katalog=self._kanal_katalog(), ref=self._kanal_ref,
-                          max_laenge=self._kanal_max_laenge())
+                          max_laenge=self._kanal_max_laenge(),
+                          titel=tr("dlg.schiene.titel") if self._kanal_schiene else None)
         if dlg.result is None:
             self.aktives_werkzeug.set("auswahl")
             self._werkzeug_toolbar()
@@ -5392,7 +5418,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         return [Kabelkanal([a, b], breite=self._kanal_breite, hoehe=self._kanal_hoehe,
                            schraffur=self._kanal_schraffur,
                            schraffur_abstand=self._kanal_schraffur_abstand, ref=self._kanal_ref,
-                           **self._kanal_layer_daten())
+                           schiene=self._kanal_schiene, **self._kanal_layer_daten())
                 for a, b in kanal_kette(
                     kanal_versatz(punkte, self._kanal_ausrichtung, self._kanal_breite, geschlossen),
                     self._kanal_breite, geschlossen)]

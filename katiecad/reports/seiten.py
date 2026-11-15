@@ -368,8 +368,10 @@ def listen_zeilen(typ, blaetter, nummer, netz=None, klemmen_in_geraeteliste=True
         return MECH.mechanikliste(blaetter, {s: tr("mech.seite." + s) for s in
                                              ("vorne", "hinten", "links", "rechts", "oben", "unten")})
     if typ == "kanaele":
+        sk = KK.katalog_laden(kanal_katalog.get("_ordner", ()), KK.DATEI_SCHIENE) \
+            if isinstance(kanal_katalog, dict) else None
         return [dict(z, art=tr("kanal.bez." + z["art"]))
-                for z in KK.kanalliste(blaetter, kanal_katalog)]
+                for z in KK.kanalliste(blaetter, kanal_katalog, sk)]
     raise ValueError(typ)
 
 
@@ -403,7 +405,7 @@ def tabellen_fuer_export(blaetter, nummer, ordner=(), klemmen_in_geraeteliste=Tr
         zeilen = listen_zeilen(typ, blaetter, nummer, netz,
                                klemmen_in_geraeteliste, einbauorte,
                                katalog, projektdaten, klemmen_seiten,
-                               KK.katalog_laden(ordner))
+                               dict(KK.katalog_laden(ordner), _ordner=list(ordner)))
         out[typ] = (_ohne_leere_einbauorte(spalten, zeilen), zeilen)
     return out
 
@@ -496,7 +498,7 @@ def _berichte_erzeugen(blaetter, projektname, daten, aktiv, vorlage, sprache,
                 zeilen = listen_zeilen(typ, basis, nummer, netz,
                                        klemmen_in_geraeteliste, einbauorte,
                                        katalog, ctx["daten"], klemmen_seiten,
-                                       KK.katalog_laden(ordner))
+                                       dict(KK.katalog_laden(ordner), _ordner=list(ordner)))
                 listen[typ] = _liste_tabelle(typ, zeilen, ordner, flaeche,
                                              namen[typ], skala, klemmen_seiten)
         hinten_n = sum(len(p) for p in listen.values())

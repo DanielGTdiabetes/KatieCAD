@@ -58,7 +58,7 @@ check(KK.aufteilen([(0, 0), (2000, 0)]) == [(0, 0), (2000, 0)], "genau eine Stan
 # ---- app: 2D tool splits into bars and stores the reference
 fake = SimpleNamespace(_kanal_breite=40.0, _kanal_hoehe=60.0, _kanal_schraffur="",
                        _kanal_schraffur_abstand=20.0, _kanal_ausrichtung="mitte",
-                       _kanal_ref="U77-4060", _kanal_max=None,
+                       _kanal_ref="U77-4060", _kanal_max=None, _kanal_schiene=False,
                        _kanal_max_laenge=lambda: 2000.0,
                        _kanal_layer_daten=lambda: {"layer": "CD"})
 stuecke = A.CadApp._kanal_stuecke(fake, [(0, 0), (4500, 0), (4500, 1200)])
