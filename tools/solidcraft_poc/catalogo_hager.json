@@ -1,0 +1,14 @@
+{
+ "_nota": "Medidas aproximadas para la prueba (1 módulo = 17,5 mm). Con STEP real: añadir \"step\": \"ruta\".",
+ "GD313": {"rol": "armario", "ancho": 310, "alto": 500, "fondo": 110,
+           "carriles": 3, "paso_carril": 125, "largo_carril": 230, "margen": 20, "separacion_fondo": 15},
+ "HDA245S": {"ancho": 70, "alto": 83, "fondo": 70},
+ "CDC748F": {"ancho": 35, "alto": 83, "fondo": 70},
+ "CDC749F": {"ancho": 35, "alto": 83, "fondo": 70},
+ "MFS702": {"ancho": 17.5, "alto": 83, "fondo": 70},
+ "MFS706": {"ancho": 17.5, "alto": 83, "fondo": 70},
+ "MFS710": {"ancho": 17.5, "alto": 83, "fondo": 70},
+ "MFS716": {"ancho": 17.5, "alto": 83, "fondo": 70},
+ "MFS720": {"ancho": 17.5, "alto": 83, "fondo": 70},
+ "MFS732": {"ancho": 17.5, "alto": 83, "fondo": 70}
+}

@@ -1,0 +1,4 @@
+[
+ {"command":"assembly.bom","params":{"path":"bom.csv"}},
+ {"command":"file.export_view_dxf","params":{"camera":{"target":[300,-125,400],"yaw":0,"pitch":0,"distance":2000},"path":"frente.dxf","hidden":"omit"}}
+]

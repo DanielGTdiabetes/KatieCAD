@@ -1,0 +1,7 @@
+[
+ {"command":"solid.box","params":{"length":45,"width":86,"height":77,"corner":[0,-86,0],"body_name":"LC1D09"}},
+ {"command":"solid.box","params":{"length":35,"width":10,"height":30,"corner":[5,-96,25],"body_name":"Frontal"}},
+ {"command":"solid.combine","params":{"target":"LC1D09","tools":["Frontal"],"operation":"join"}},
+ {"command":"solid.hole","params":{"position":[10,-96,45],"diameter":4,"depth":5}},
+ {"command":"file.export","params":{"path":"lib/LC1D09.step"}}
+]

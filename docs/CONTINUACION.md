@@ -308,7 +308,58 @@ Comprobado en su README y documentación (noviembre de 2026):
    Inconvenientes: dos programas; SolidCraft en beta; el armario 3D de KatieCAD (vistas en
    presentaciones) quedaría para vistas sencillas o se sustituiría por vistas exportadas.
 
-Decisión pendiente del usuario: 3D propio (4.1–4.3) o conector SolidCraft (4.4). Las partes 4.3.1
+#### Prueba de concepto (15-11-2026) – `tools/solidcraft_poc/`
+
+SolidCraft instalado por el usuario en `D:\SolidCraft` (`solidcraft-cli 0.41.0`, 642 comandos;
+la última publicada es 0.42.0). Montaje neutro `montaje.json` → `montaje_a_solidcraft.py` →
+script → `solidcraft-cli run … --save cuadro.sc --out cuadro.step`. Resultado:
+
+- **Funciona todo lo probado, sin avisos:** armario 600×800×250 (chapas), placa, 2 carriles DIN
+  con taladros roscados M5 (`solid.hole` con `thread`), 5 canaletas Unex 60.40.77 y 7 equipos
+  insertados desde STEP (`file.insert_step` con `matrix` 3×4 y `name` = IND).
+- **Rápido:** 33 comandos en 0,37 s; 120 equipos (259 comandos) en 0,5 s. Ojo: los STEP de prueba
+  son cajas sencillas; los de fabricante reales pesan mucho más, falta medir con ellos.
+- **Lista de materiales nativa:** `component.metadata.set` (`part_number`, `description`,
+  `bom_type: purchased`) + `assembly.bom {path: "bom.csv"}` agrupa por referencia con las IND
+  (`LC1D09 ×3: -K1; -K2; -K3`).
+- **El STEP exportado conserva los nombres** (`PRODUCT('-K1')`…): sirve para otros programas.
+- **Vuelta atrás posible:** `component.list` devuelve cada ocurrencia (`-K1:1`) con su matriz
+  `transform` (fila de traslación al final). Así KatieCAD podría leer las posiciones si el
+  usuario mueve equipos en SolidCraft, lo que hace viable también la opción **b)**.
+- **Planos:** `file.export_view_dxf` (vista frontal → DXF, capas VISIBLE/HIDDEN) y
+  `solidcraft-cli snapshot` (PNG) para la documentación.
+- Detalles: la primera pieza insertada queda `grounded`; las canaletas se solapan en los cruces
+  (habría que cortarlas o separar los tramos); falta probar cortes en la puerta (sketch + extrude
+  `cut` o `solid.hole` en la cara) y la chapa con desarrollo plano.
+- **MCP:** `solidcraft-cli mcp` (y `--live` contra la app abierta) sirve para editar el montaje
+  en diálogo con Claude; la exportación de KatieCAD debe seguir usando la CLI (determinista y
+  sin modelo). Registrarlo: `solidcraft-cli mcp setup --client claude-code` (cambia la
+  configuración de Claude Code, pedir permiso antes).
+
+**Pasarela desde QElectroTech (15-11-2026):** `tools/solidcraft_poc/qet_a_montaje.py` lee un
+`.qet` (XML: `diagram` > `element` > `elementInformation` `label`, `manufacturer`,
+`designation`, `description`), quita duplicados por etiqueta (unifilar y desarrollado, contactos
+esclavos), busca medidas/STEP en un catálogo por referencia (`catalogo_hager.json`; el cofre se
+reconoce por su referencia con `rol: armario`) y reparte los equipos por los carriles. Probado con
+`examples/tableau_domestique.qet` (Hager, cofre GD313): 28 equipos en 3 carriles, 100 comandos,
+sin avisos; la lista de materiales de SolidCraft coincide con el esquema (9 × MFS720, 6 × MFS710…).
+Límites: QElectroTech no guarda posiciones de montaje (reparto automático por etiqueta; colocar
+después en SolidCraft y leer con `component.list`), solo `.qet` (no `.qetz`), y elementos sin
+referencia no se montan.
+
+Hallazgos en la instalación de QElectroTech (`C:\Program Files\QElectroTech`, Qt6):
+- Trae un **servidor MCP propio** (`mcp/qet_mcp.py`, solo biblioteca estándar de Python): leer
+  elementos y conductores, `qet_diff`, `qet_export` sin pantalla (pdf, dxf, bom, cables, hilos…),
+  `qet_edit` (colocar, cablear, numerar), comprobaciones de diseño, SQL sobre la base del proyecto
+  y scripts que se instalan como botones. No se ha probado.
+- `ELEMENTS.LICENSE`: los símbolos se pueden usar sin restricción dentro de esquemas;
+  redistribuirlos fuera de un esquema exige CC-BY 3.0; prohíbe usarlos como datos para entrenar
+  modelos de aprendizaje automático.
+
+Siguiente paso propuesto: repetir la prueba con 2 o 3 STEP reales de fabricante (Schneider,
+Phoenix, Unex) para medir tiempos y la orientación de los ejes de cada fabricante.
+
+Decisión pendiente del usuario: 3D propio (4.1–4.3) o conector SolidCraft (4.5). Las partes 4.3.1
 (lista de mecanizados), 4.3.2 (datos de canaleta) y 4.3.3 (desplazar con offset) sirven en
 ambos casos.
 

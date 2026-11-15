@@ -1,0 +1,24 @@
+{
+ "armario": {"ancho": 600, "alto": 800, "fondo": 250, "chapa": 1.5},
+ "placa": {"ancho": 540, "alto": 740, "grueso": 3, "separacion_fondo": 20},
+ "carriles": [
+  {"x": 80, "z": 620, "largo": 440},
+  {"x": 80, "z": 380, "largo": 440}
+ ],
+ "canaletas": [
+  {"ref": "60.40.77", "dir": "h", "x": 40, "z": 690, "largo": 520, "alto": 60, "ancho": 40},
+  {"ref": "60.40.77", "dir": "h", "x": 40, "z": 480, "largo": 520, "alto": 60, "ancho": 40},
+  {"ref": "60.40.77", "dir": "h", "x": 40, "z": 250, "largo": 520, "alto": 60, "ancho": 40},
+  {"ref": "60.40.77", "dir": "v", "x": 40, "z": 70, "largo": 660, "alto": 60, "ancho": 40},
+  {"ref": "60.40.77", "dir": "v", "x": 520, "z": 70, "largo": 660, "alto": 60, "ancho": 40}
+ ],
+ "equipos": [
+  {"ind": "-Q1", "ref": "iC60N C16", "desc": "Magnetotérmico 1P C16", "step": "lib/iC60N_C16.step", "x": 100, "z": 575},
+  {"ind": "-Q2", "ref": "iC60N C16", "desc": "Magnetotérmico 1P C16", "step": "lib/iC60N_C16.step", "x": 118, "z": 575},
+  {"ind": "-Q3", "ref": "iC60N C16", "desc": "Magnetotérmico 1P C16", "step": "lib/iC60N_C16.step", "x": 136, "z": 575},
+  {"ind": "-Q4", "ref": "iC60N C16", "desc": "Magnetotérmico 1P C16", "step": "lib/iC60N_C16.step", "x": 154, "z": 575},
+  {"ind": "-K1", "ref": "LC1D09", "desc": "Contactor 9 A", "step": "lib/LC1D09.step", "x": 100, "z": 341},
+  {"ind": "-K2", "ref": "LC1D09", "desc": "Contactor 9 A", "step": "lib/LC1D09.step", "x": 150, "z": 341},
+  {"ind": "-K3", "ref": "LC1D09", "desc": "Contactor 9 A", "step": "lib/LC1D09.step", "x": 200, "z": 341}
+ ]
+}
