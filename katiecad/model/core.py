@@ -703,6 +703,7 @@ BEFEHLE = {
     "KUGEL": "3d:neu:kugel", "SPHERE": "3d:neu:kugel",
     "EXTRUDIEREN": "3d:extrudieren", "EXT": "3d:extrudieren", "EXTRUDE": "3d:extrudieren",
     "LOCH": "3d:loch", "BOHRUNG": "3d:loch", "HOLE": "3d:loch",
+    "MECHANIK": "3d:mechanik", "MECANIZADO": "3d:mechanik", "MACHINING": "3d:mechanik",
     "3DMASS": "3d:mass", "MASSE": "3d:mass",
     "3DDREHEN": "3d:drehen", "3DROTATE": "3d:drehen", "DREHEN3D": "3d:drehen",
     "3DABRUNDEN": "3d:abrunden", "3DFILLET": "3d:abrunden",
@@ -5457,7 +5458,10 @@ class Koerper3D(Element):
                 "ebene": _ebene_tuple(a["ebene"]),
                 "profil": [(float(p[0]), float(p[1])) for p in a["profil"]],
                 "tiefe": None if a.get("tiefe") is None else float(a["tiefe"]),
-                "rund": bool(a.get("rund", False))})
+                "rund": bool(a.get("rund", False)),
+                # machining: label and centre on the face (see model/mechanik.py)
+                "bez": str(a.get("bez", "") or ""),
+                "pos": None if a.get("pos") is None else [float(a["pos"][0]), float(a["pos"][1])]})
 
     # ---- geometry ---------------------------------------------------------
     def _netzdaten_abbilden(self, f):
@@ -5516,11 +5520,12 @@ class Koerper3D(Element):
         self.loecher.append((float(x), float(y), float(r),
                              None if tiefe is None else abs(float(tiefe))))
 
-    def ausschnitt_hinzufuegen(self, ebene, profil, tiefe=None, rund=False):
+    def ausschnitt_hinzufuegen(self, ebene, profil, tiefe=None, rund=False, bez="", pos=None):
         self.ausschnitte.append({"ebene": _ebene_tuple(ebene),
                                  "profil": [(float(x), float(y)) for (x, y) in profil],
                                  "tiefe": None if tiefe is None else abs(float(tiefe)),
-                                 "rund": bool(rund)})
+                                 "rund": bool(rund), "bez": str(bez or ""),
+                                 "pos": None if pos is None else [float(pos[0]), float(pos[1])]})
 
     def koerper(self):
         return [self]
@@ -5739,8 +5744,15 @@ class Koerper3D(Element):
         d["kugel"] = list(self.kugel) if self.kugel else None
         d["loecher"] = [list(l) for l in self.loecher]
         d["ebene"] = list(self.ebene) if self.ebene else None
-        d["ausschnitte"] = [{"ebene": list(a["ebene"]), "profil": [list(p) for p in a["profil"]],
-                             "tiefe": a["tiefe"], "rund": a["rund"]} for a in self.ausschnitte]
+        d["ausschnitte"] = []
+        for a in self.ausschnitte:
+            ad = {"ebene": list(a["ebene"]), "profil": [list(p) for p in a["profil"]],
+                  "tiefe": a["tiefe"], "rund": a["rund"]}
+            if a.get("bez"):
+                ad["bez"] = a["bez"]
+            if a.get("pos") is not None:
+                ad["pos"] = list(a["pos"])
+            d["ausschnitte"].append(ad)
         return d
 
 

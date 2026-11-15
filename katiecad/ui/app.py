@@ -1489,6 +1489,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         m_3d.add_separator()
         m_3d.add_command(label=tr("menu.3d.loch"),
                          command=lambda: self.ansicht3d_befehl("loch"))
+        m_3d.add_command(label=tr("menu.3d.mechanik"),
+                         command=lambda: self.ansicht3d_befehl("mechanik"))
         m_3d.add_command(label=tr("menu.3d.mass"),
                          command=lambda: self.ansicht3d_befehl("mass"))
         m_3d.add_command(label=tr("menu.3d.drehen"),
@@ -5317,6 +5319,13 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         programm = os.path.dirname(TB.program_folder())
         p = getattr(self, "projekt", None)
         return katalog_laden(SEI.spalten_ordner(programm, p.ordner if p else None))
+
+    def _mechanik_vorlagen(self):
+        """Machining templates of the program and the project (report_templates/mecanizado.json)."""
+        from katiecad.model.mechanik import vorlagen_laden
+        programm = os.path.dirname(TB.program_folder())
+        p = getattr(self, "projekt", None)
+        return vorlagen_laden(SEI.spalten_ordner(programm, p.ordner if p else None))
 
     def _kanal_max_laenge(self):
         if self._kanal_max:

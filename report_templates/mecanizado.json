@@ -1,0 +1,126 @@
+{
+  "_hinweis": "Vorlagen des Bearbeitungsdialogs / plantillas del mecanizado (mm). Ventilator-Ausschnitte bitte mit dem Datenblatt des Lüfters prüfen. Eine Kopie in <Projekt>/report_templates hat Vorrang.",
+  "vorlagen": [
+    {
+      "name": "Pulsador / piloto Ø22,5",
+      "form": "rund",
+      "d": 22.5
+    },
+    {
+      "name": "Pulsador / piloto Ø16",
+      "form": "rund",
+      "d": 16
+    },
+    {
+      "name": "Prensaestopas M12 (Ø12.5)",
+      "form": "rund",
+      "d": 12.5
+    },
+    {
+      "name": "Prensaestopas M16 (Ø16.5)",
+      "form": "rund",
+      "d": 16.5
+    },
+    {
+      "name": "Prensaestopas M20 (Ø20.5)",
+      "form": "rund",
+      "d": 20.5
+    },
+    {
+      "name": "Prensaestopas M25 (Ø25.5)",
+      "form": "rund",
+      "d": 25.5
+    },
+    {
+      "name": "Prensaestopas M32 (Ø32.5)",
+      "form": "rund",
+      "d": 32.5
+    },
+    {
+      "name": "Prensaestopas M40 (Ø40.5)",
+      "form": "rund",
+      "d": 40.5
+    },
+    {
+      "name": "Prensaestopas M50 (Ø50.5)",
+      "form": "rund",
+      "d": 50.5
+    },
+    {
+      "name": "Prensaestopas M63 (Ø63.5)",
+      "form": "rund",
+      "d": 63.5
+    },
+    {
+      "name": "Taladro roscar M4 (Ø3.3)",
+      "form": "rund",
+      "d": 3.3
+    },
+    {
+      "name": "Taladro pasante M4 (Ø4.5)",
+      "form": "rund",
+      "d": 4.5
+    },
+    {
+      "name": "Taladro roscar M5 (Ø4.2)",
+      "form": "rund",
+      "d": 4.2
+    },
+    {
+      "name": "Taladro pasante M5 (Ø5.5)",
+      "form": "rund",
+      "d": 5.5
+    },
+    {
+      "name": "Taladro roscar M6 (Ø5)",
+      "form": "rund",
+      "d": 5.0
+    },
+    {
+      "name": "Taladro pasante M6 (Ø6.6)",
+      "form": "rund",
+      "d": 6.6
+    },
+    {
+      "name": "Recorte ventilador 92 x 92",
+      "form": "rechteck",
+      "b": 92,
+      "h": 92
+    },
+    {
+      "name": "Recorte ventilador 125 x 125",
+      "form": "rechteck",
+      "b": 125,
+      "h": 125
+    },
+    {
+      "name": "Recorte ventilador 177 x 177",
+      "form": "rechteck",
+      "b": 177,
+      "h": 177
+    },
+    {
+      "name": "Recorte ventilador 223 x 223",
+      "form": "rechteck",
+      "b": 223,
+      "h": 223
+    },
+    {
+      "name": "Recorte ventilador 291 x 291",
+      "form": "rechteck",
+      "b": 291,
+      "h": 291
+    },
+    {
+      "name": "Rectangular libre",
+      "form": "rechteck",
+      "b": 100,
+      "h": 50
+    },
+    {
+      "name": "Circular libre",
+      "form": "rund",
+      "d": 20
+    }
+  ]
+}

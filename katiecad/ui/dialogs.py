@@ -3113,7 +3113,7 @@ class DokumentationDialog(tk.Toplevel):
     STANDARD = ("deckblatt", "inhalt", "geraete", "klemmen", "kabel")
     TYPEN = STANDARD + ("verbindungen", "stueckliste", "querverweise",
                         "potenziale", "stecker", "etiketten", "revisionen", "sps",
-                        "kanaele", "leistenbild")
+                        "kanaele", "mechanik", "leistenbild")
     SEITEN_MODI = ("auto", "oben_intern", "unten_intern", "oben_unten")
 
     def __init__(self, parent, vorlagen, einst, daten, projektname,

@@ -25,7 +25,7 @@ from katiecad.model.core import (FARBEN, UI_SCHRIFT, Koerper3D, Gruppe3D, Skizze
 from katiecad.model import geom3d as G
 from katiecad.model import szene3d as S
 from katiecad.model import schrank as SCHR
-from katiecad.ui.dialogs import _modal, _LayoutNameDialog
+from katiecad.ui.dialogs import _modal, _LayoutNameDialog, _zentrieren
 
 # basic 2D tools of the toolbar -> their 3D counterparts (drawing on the work plane / 3D dimension)
 WERKZEUG_3D = {"linie": "linie", "polylinie": "poly", "kreis": "kreis", "rechteck": "rechteck",
@@ -366,6 +366,103 @@ class AbrundDialog(tk.Toplevel):
         self.destroy()
 
 
+class MechanikDialog(tk.Toplevel):
+    """Machining on a face: template, round / rectangular, size, position (centre from the
+    lower left corner of the face), rows x columns with pitch, depth (0 = through), label.
+    Values in the drawing unit. result = dict (see mechanik_ergebnis) or None."""
+
+    def __init__(self, parent, einheit, vorlagen, x, y, breite, hoehe, letzt=None):
+        super().__init__(parent)
+        self.result = None
+        self._vorlagen = list(vorlagen)
+        l = letzt or {}
+        self.title(tr("d3.mech.titel"))
+        self.transient(parent)
+        self.configure(bg=FARBEN["bg_mittel"])
+        self.resizable(False, False)
+        f = ttk.Frame(self, padding=12)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=tr("d3.mech.flaeche", b="%g" % round(breite, 1), h="%g" % round(hoehe, 1),
+                             e=einheit), style="Title.TLabel").grid(row=0, column=0, columnspan=4,
+                                                                    sticky=tk.W)
+        ttk.Label(f, text=tr("d3.mech.vorlage")).grid(row=1, column=0, sticky=tk.W, pady=(8, 2))
+        self.vorlage = tk.StringVar(value=l.get("vorlage", ""))
+        cb = ttk.Combobox(f, textvariable=self.vorlage, state="readonly", width=34,
+                          values=[v["name"] for v in self._vorlagen])
+        cb.grid(row=1, column=1, columnspan=3, sticky=tk.W, pady=(8, 2))
+        cb.bind("<<ComboboxSelected>>", lambda ev: self._vorlage_gewaehlt())
+        self.form = tk.StringVar(value=l.get("form", "rund"))
+        ff = ttk.Frame(f)
+        ff.grid(row=2, column=1, columnspan=3, sticky=tk.W)
+        for wert in ("rund", "rechteck"):
+            ttk.Radiobutton(ff, text=tr("d3.mech.form." + wert), value=wert,
+                            variable=self.form).pack(side=tk.LEFT, padx=(0, 12))
+        self.v = {}
+        felder = (("d", 3, 0), ("b", 4, 0), ("h", 4, 2), ("x", 5, 0), ("y", 5, 2),
+                  ("nx", 6, 0), ("dx", 6, 2), ("ny", 7, 0), ("dy", 7, 2), ("tiefe", 8, 0))
+        vorg = {"d": l.get("d", 22.5), "b": l.get("b", 92), "h": l.get("h", 92), "x": x, "y": y,
+                "nx": l.get("nx", 1), "dx": l.get("dx", 30), "ny": l.get("ny", 1),
+                "dy": l.get("dy", 30), "tiefe": l.get("tiefe", 3)}
+        for key, row, col in felder:
+            ttk.Label(f, text=tr("d3.mech." + key)).grid(row=row, column=col, sticky=tk.W, pady=2,
+                                                        padx=(0 if col == 0 else 10, 4))
+            var = tk.StringVar(value="%g" % vorg[key])
+            ttk.Entry(f, textvariable=var, width=9).grid(row=row, column=col + 1, sticky=tk.W, pady=2)
+            self.v[key] = var
+        ttk.Label(f, text=tr("d3.mech.bez")).grid(row=9, column=0, sticky=tk.W, pady=2)
+        self.bez = tk.StringVar(value=l.get("bez", ""))
+        ttk.Entry(f, textvariable=self.bez, width=36).grid(row=9, column=1, columnspan=3, sticky=tk.W)
+        ttk.Label(f, text=tr("d3.mech.hinweis", e=einheit), style="Hint.TLabel", wraplength=420,
+                  justify=tk.LEFT).grid(row=10, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
+        bt = ttk.Frame(f)
+        bt.grid(row=11, column=0, columnspan=4, pady=(10, 0))
+        ttk.Button(bt, text="OK", command=self._ok).pack(side=tk.LEFT, padx=6)
+        ttk.Button(bt, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=6)
+        self.bind("<Return>", lambda ev: self._ok())
+        self.bind("<Escape>", lambda ev: self.destroy())
+        _zentrieren(self, parent)
+        _modal(self)
+
+    def _vorlage_gewaehlt(self):
+        v = next((v for v in self._vorlagen if v["name"] == self.vorlage.get()), None)
+        if v is None:
+            return
+        self.form.set(v["form"])
+        if v["form"] == "rund":
+            self.v["d"].set("%g" % v["d"])
+        else:
+            self.v["b"].set("%g" % v["b"])
+            self.v["h"].set("%g" % v["h"])
+        self.bez.set(v["name"])
+
+    def _ok(self):
+        werte = {k: var.get() for k, var in self.v.items()}
+        erg = mechanik_ergebnis(self.form.get(), werte, self.bez.get(), self.vorlage.get())
+        if erg is None:
+            messagebox.showerror(tr("d3.titel"), tr("d3.msg.zahl"), parent=self)
+            return
+        self.result = erg
+        self.destroy()
+
+
+def mechanik_ergebnis(form, werte, bez="", vorlage=""):
+    """Parses the machining dialog (decimal comma allowed). Sizes must be > 0, counts >= 1,
+    depth >= 0. -> dict or None."""
+    out = {"form": form if form in ("rund", "rechteck") else "rund", "bez": str(bez).strip(),
+           "vorlage": vorlage}
+    try:
+        for k in ("d", "b", "h", "x", "y", "dx", "dy", "tiefe"):
+            out[k] = float(str(werte.get(k, "0")).strip().replace(",", ".") or 0)
+        for k in ("nx", "ny"):
+            out[k] = int(float(str(werte.get(k, "1")).strip().replace(",", ".") or 1))
+    except ValueError:
+        return None
+    groesse = out["d"] if out["form"] == "rund" else min(out["b"], out["h"])
+    if groesse <= 0 or out["nx"] < 1 or out["ny"] < 1 or out["tiefe"] < 0:
+        return None
+    return out
+
+
 class MassDialog(tk.Toplevel):
     """Edit the dimensions of a body / sketch. result = {key: value} in display units."""
 
@@ -437,7 +534,7 @@ def _vorzeichen(k):
 
 
 class Ansicht3D(tk.Frame):
-    MODI = ("flaeche", "linie", "kreis", "rechteck", "poly", "bem", "kanal", "kanalverb", "pivot", "text", "messen", "verschieben", "strecken")
+    MODI = ("flaeche", "linie", "kreis", "rechteck", "poly", "bem", "kanal", "kanalverb", "pivot", "text", "messen", "verschieben", "strecken", "mechanik")
     SKIZZEN = ("linie", "kreis", "rechteck", "poly")
 
     def __init__(self, app):
@@ -1229,6 +1326,8 @@ class Ansicht3D(tk.Frame):
             self._modus_ende()
             self.info_var.set(tr("d3.msg.ebene_gesetzt"))
             self.zeichne()
+        elif m == "mechanik":
+            self._mechanik_klick(e)
         elif m == "kanal":
             self._kanal_klick(e)
         elif m == "kanalverb":
@@ -2146,6 +2245,41 @@ class Ansicht3D(tk.Frame):
     # ------------------------------------------------------------------
     # bore, extrude, size, block
     # ------------------------------------------------------------------
+    def _mechanik_klick(self, e):
+        """Machining: the clicked face gets cut-outs / holes from the dialog (template, size,
+        position from the lower left corner, rows x columns). The mode stays on for the
+        next face; Esc ends it."""
+        from katiecad.model import mechanik as M
+        r = S.flaeche_pick(self._sichtbare(), self.kamera, *self._mitte(), e.x, e.y)
+        if r is None:
+            self.info_var.set(tr("d3.msg.keine_flaeche"))
+            return
+        k, _eb, pts = r
+        fe = M.flaechen_ebene(pts, k.zentrum3())
+        if fe is None:
+            self.info_var.set(tr("d3.msg.keine_flaeche"))
+            return
+        ebene, bw, bh = fe
+        fak = self.app._einh_faktor()
+        p = self._lokal_punkt(e, ebene) or (bw / 2.0, bh / 2.0)
+        letzt = dict(self.zustand.get("mechanik") or {})
+        dlg = MechanikDialog(self.app.root, self.app.einheit.get(), self.app._mechanik_vorlagen(),
+                             round(p[0] / fak, 2), round(p[1] / fak, 2), bw / fak, bh / fak, letzt)
+        self.app.root.wait_window(dlg)
+        if not dlg.result:
+            return
+        v = dlg.result
+        self.zustand["mechanik"] = {kk: v[kk] for kk in v if kk not in ("x", "y")}
+        mitten = M.positionen(v["x"] * fak, v["y"] * fak, v["nx"], v["dx"] * fak,
+                              v["ny"], v["dy"] * fak)
+        self.app._snapshot()
+        n = M.mechanisieren(self.app.elemente, ebene, v["form"], mitten, d=v["d"] * fak,
+                            b=v["b"] * fak, h=v["h"] * fak, tiefe=v["tiefe"] * fak, bez=v["bez"],
+                            koerper=k)
+        self.app.redraw()
+        self.zeichne()
+        self.info_var.set(tr("d3.msg.mech_fertig", n=n, m=len(mitten) - n))
+
     def loch_dialog(self):
         """Bore / pocket from the selected sketches into the body they lie on."""
         sk = [x for x in self.app.auswahl if isinstance(x, Skizze3D)]
@@ -2548,6 +2682,8 @@ class Ansicht3DMixin:
             w.extrudieren_dialog()
         elif cmd == "loch":
             w.loch_dialog()
+        elif cmd == "mechanik":
+            w.modus_setzen("mechanik")
         elif cmd == "block":
             w.block_bilden()
         elif cmd == "aufloesen":

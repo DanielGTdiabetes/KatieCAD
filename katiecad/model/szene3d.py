@@ -653,10 +653,11 @@ def fang_punkt(elemente, kamera, cx, cy, mx, my, tol=12.0):
     return r[0] if r else None
 
 
-def host_finden(elemente, ebene, punkt=None):
+def host_finden(elemente, ebene, punkt=None, nur_innen=False):
     """Body whose face lies in the work plane `ebene`. With `punkt` (local plane point,
     e.g. the sketch centre) the body whose face contains that point wins, so two bodies
-    with faces in the same plane are told apart; otherwise the first match."""
+    with faces in the same plane are told apart; otherwise the first match
+    (nur_innen=True: None instead - the point must lie on a face)."""
     u, v, w = G.ebene_basis(ebene)
     erste = None
     for el in elemente:
@@ -686,7 +687,7 @@ def host_finden(elemente, ebene, punkt=None):
                 if G.punkt_in_polygon(G.ebene_lokal(ebene, wp)[0], G.ebene_lokal(ebene, wp)[1],
                                       [(q[0], q[1]) for q in lok]):
                     return k
-    return erste
+    return None if (nur_innen and punkt is not None) else erste
 
 
 def skizze_in_ausschnitt(elemente, skizze, tiefe=None):

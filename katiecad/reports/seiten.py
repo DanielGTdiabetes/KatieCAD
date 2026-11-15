@@ -28,6 +28,7 @@ from katiecad.reports import daten_listen as DL
 from katiecad.reports import daten_sps as DS
 from katiecad.reports import leistenbild as LB
 from katiecad.model import kanal_katalog as KK
+from katiecad.model import mechanik as MECH
 from katiecad.reports.netz import Netz
 from katiecad.reports.tabelle import (Spalte, tabellen_seiten,
                                       zeilen_vorbereiten, TEXT, LINIE)
@@ -47,9 +48,10 @@ def skala_fuer(fmt):
 STANDARD_TYPEN = ("deckblatt", "inhalt", "geraete", "klemmen", "kabel")
 TYPEN = STANDARD_TYPEN + ("verbindungen", "stueckliste", "querverweise",
                           "potenziale", "stecker", "etiketten", "revisionen", "sps",
-                          "kanaele", "leistenbild")
+                          "kanaele", "mechanik", "leistenbild")
 LISTEN = ("geraete", "klemmen", "kabel", "verbindungen", "stueckliste",
-          "querverweise", "potenziale", "stecker", "etiketten", "revisionen", "sps", "kanaele")
+          "querverweise", "potenziale", "stecker", "etiketten", "revisionen", "sps", "kanaele",
+          "mechanik")
 NETZ_LISTEN = {"sps", "klemmen", "kabel", "verbindungen", "stueckliste", "querverweise",
                "potenziale", "stecker", "etiketten", "leistenbild"}
 GRAFIKEN = ("leistenbild",)        # drawings (no table, not in CSV / Excel)
@@ -175,6 +177,10 @@ _STANDARD = {
                 ("stueck", "rep.col.anzahl", 10, "r"),
                 ("laenge", "rep.col.laenge_m", 14, "r"),
                 ("stangen", "rep.col.stangen", 14, "r")],
+    "mechanik": [("pos", "rep.col.pos", 6, "r"), ("teil", "rep.col.teil", 22, "l"),
+                 ("seite", "rep.col.seite", 14, "l"), ("art", "rep.col.art", 40, "l"),
+                 ("masse", "rep.col.masse", 16, "l"), ("x", "rep.col.x", 12, "r"),
+                 ("y", "rep.col.y", 12, "r"), ("tiefe", "rep.col.tiefe", 14, "r")],
     "revisionen": [("stand", "rep.col.stand", 12, "l"),
                    ("aenderung", "rep.col.aenderung", 100, "l"),
                    ("name", "rep.col.name", 30, "l"),
@@ -358,6 +364,9 @@ def listen_zeilen(typ, blaetter, nummer, netz=None, klemmen_in_geraeteliste=True
         return DL.revisionsuebersicht(projektdaten)
     if typ == "sps":
         return DS.sps_liste(netz, blaetter, nummer, einbauorte)
+    if typ == "mechanik":
+        return MECH.mechanikliste(blaetter, {s: tr("mech.seite." + s) for s in
+                                             ("vorne", "hinten", "links", "rechts", "oben", "unten")})
     if typ == "kanaele":
         return [dict(z, art=tr("kanal.bez." + z["art"]))
                 for z in KK.kanalliste(blaetter, kanal_katalog)]

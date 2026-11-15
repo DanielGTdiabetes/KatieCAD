@@ -64,6 +64,7 @@ BESCHREIBUNG = {
     "3d:drehen": ("3D: Körper drehen", "3D: rotate solid"),
     "3d:extrudieren": ("3D: Fläche extrudieren", "3D: extrude"),
     "3d:loch": ("3D: Loch / Bohrung", "3D: hole"),
+    "3d:mechanik": ("3D: Bearbeitung (Ausschnitte, Bohrungen auf einer Fläche)", "3D: machining (cut-outs, holes on a face)"),
     "3d:mass": ("3D: Maße", "3D: dimensions"),
     "3d:neu:kegel": ("3D: Kegel", "3D: cone"),
     "3d:neu:kugel": ("3D: Kugel", "3D: sphere"),

@@ -128,7 +128,20 @@ Petición: importar STEP y asignar un modelo 3D a cada equipo del esquema; el vi
    - plano de colocación = **cara delantera de la placa de montaje** (plano vertical y = cte)
      en lugar del plano horizontal; con OSNAP siguen enganchando las esquinas.
    - Armarios girados un ángulo cualquiera: de momento colocar en el suelo y avisar.
-4. Tests: `tests/test_modell3d.py` con un STL pequeño generado en el test (cubo), simplificación
+4. **Modelo 3D asociado al símbolo** (petición del usuario, 15-11-2026): asignar el STEP una vez y
+   tenerlo ya disponible al pasar a 3D. Tres niveles, del más general al más concreto:
+   - **por artículo** (TYP + fabricante, en el catálogo de piezas del proyecto `p.daten["bauteile"]`):
+     todos los equipos con ese tipo heredan el modelo — lo más útil en taller;
+   - **por símbolo** (atributo `MODELL3D` en la definición del bloque / `.katieblock`);
+   - **por equipo** (atributo `MODELL3D` del `BlockReferenz`, gana a los anteriores).
+   Al entrar en 3D, «Colocar equipos» lista los equipos del proyecto con modelo y sin colocar.
+5. **Puntos de captura** (petición del usuario): cada modelo importado necesita uno o varios puntos
+   para moverlo y encajarlo: automáticos (esquinas de la caja, centro de la trasera, punto medio de
+   la trasera a la altura del carril DIN = punto de enganche) y opcionales definidos al importar
+   (taladros de fijación). Guardarlos en el `.katie3d` (`"fang": [[x, y, z, "art"], ...]`) e
+   incluirlos en `szene3d.fang_kandidaten` y en `_platz_pos` (el punto de enganche del equipo se
+   engancha a la línea del carril).
+6. Tests: `tests/test_modell3d.py` con un STL pequeño generado en el test (cubo), simplificación
    (un cubo triangulado debe quedar con 12 aristas), orientación, caché, y con OCP instalado un
    STEP generado con OCP (`BRepPrimAPI_MakeBox` + `STEPControl_Writer`) para no depender de
    archivos externos.
@@ -155,7 +168,10 @@ offset en X, Y o Z.
 
 **Lo que falta (diseño):**
 
-1. **Diálogo de mecanizado** (menú 3D > «Mecanizado…», sobre la cara elegida):
+1. **HECHO (15-11-2026):** diálogo de mecanizado (`model/mechanik.py`, `MechanikDialog` y
+   `_mechanik_klick` en `ui/ansicht3d.py`, plantillas `report_templates/mecanizado.json`, lista
+   `mechanik`, test `tests/test_mechanik.py`). Pendiente: exportar DXF plano por cara para CNC.
+   Diseño original: **Diálogo de mecanizado** (menú 3D > «Mecanizado…», sobre la cara elegida):
    - Tipo: rectangular, circular, taladro de fijación, y **plantillas de serie** editables en
      un JSON del programa/proyecto (como `report_templates/`): pulsador/piloto Ø22,5;
      Ø16; prensaestopas M16/M20/M25/M32/M40/M50/M63 (taladro = métrica + holgura);
