@@ -1,7 +1,7 @@
 ; Inno Setup script - Windows installer for KatieCAD
-; Build:  iscc /DAppVersion=1.1.7 installer\KatieCAD.iss
+; Build:  iscc /DAppVersion=1.2.0-rc.2 installer\KatieCAD.iss
 #ifndef AppVersion
-  #define AppVersion "1.1.7"
+  #define AppVersion "1.2.0-rc.2"
 #endif
 
 [Setup]
@@ -9,9 +9,9 @@ AppId={{6F3B8E1A-4C2D-4F6B-9A57-0A1B2C3D4E5F}
 AppName=KatieCAD
 AppVersion={#AppVersion}
 AppPublisher=KatieCAD
-AppPublisherURL=https://github.com/Merecete/KatieCAD
-AppSupportURL=https://github.com/Merecete/KatieCAD/issues
-AppUpdatesURL=https://github.com/Merecete/KatieCAD/releases
+AppPublisherURL=https://github.com/DanielGTdiabetes/KatieCAD
+AppSupportURL=https://github.com/DanielGTdiabetes/KatieCAD/issues
+AppUpdatesURL=https://github.com/DanielGTdiabetes/KatieCAD/releases
 AppCopyright=BSD 3-Clause License
 DefaultDirName={autopf}\KatieCAD
 DefaultGroupName=KatieCAD
