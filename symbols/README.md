@@ -121,6 +121,40 @@ im Eintrag **Symbole**, je Kategorie ein Unterordner.
 PLC symbols carry the invisible attribute `SPS` (`CPU`, `DI`, `DO`, `AI`, `AO`); the pin name is the
 channel address (rename it in the reference, e.g. `I4.2`). This marks an object as a PLC for the PLC list. Further invisible attributes (edit with **Edit attributes**): `STATION` (controller), `PLATZ` (slot) and per channel `VPn_SYM` (symbol), `VPn_KOM` (comment).
 
+### 12 Single-pole
+
+One-line (single-pole) representation for overview and distribution diagrams. One
+connection line stands for all poles; the stroke on the line with the number (`3`, `3+N`)
+is the pole count (field POLE of the mask). The masks are marked as **single-pole
+representation**: these symbols are not counted in lists, the net, wire numbering or
+checks, so a device drawn in the circuit diagram AND in the one-line diagram is not counted
+twice. Switch this on per project with *Evaluate single-pole representation too*
+(documentation dialog).
+
+| Name | Deutsch | Pins (top / bottom) |
+|---|---|---|
+| Circuit breaker 1p | Leitungsschutzschalter | 1,3,5 / 2,4,6 |
+| Motor protection switch 1p | Motorschutzschalter | 1,3,5 / 2,4,6 |
+| Fuse 1p, NH fuse 1p | Sicherung, NH-Sicherung | 1,3,5 / 2,4,6 |
+| RCD 1p | Fehlerstromschutzschalter | 1,3,5 / 2,4,6 |
+| Overvoltage protection 1p | Überspannungsschutz | L1,L2,L3,N / PE |
+| Disconnector 1p | Trennschalter (seccionador) | 1,3,5 / 2,4,6 |
+| Switch disconnector 1p | Lasttrennschalter (interruptor-seccionador) | 1,3,5 / 2,4,6 |
+| Contactor 1p | Schütz-Hauptkontakt (contactor), auxiliary device | 1,3,5 / 2,4,6 |
+| Energy meter 1p | Energiezähler kWh (contador) | 1,3,5 / 2,4,6 |
+| Frequency converter 1p | Frequenzumrichter (variador) | L1,L2,L3 / U,V,W |
+| UPS 1p | USV (SAI), with battery | L,N IN / L,N OUT |
+| Power supply AC-DC 1p | Netzteil | L,N / +,- |
+| Transformer 1p (2 variants) | Transformator | 1,2 / 3,4 |
+| Busbar 1p | Sammelschiene (embarrado), 7 taps every 10 mm, feeders from above or below | L1,L2,L3,N |
+| PV generator 1p | Photovoltaik-Generator (fotovoltaica) | - / +,- |
+| PV inverter 1p | PV-Wechselrichter (inversor) | +,- / L1,L2,L3,N |
+| Motor 1p (3~, 1~, DC) | Motor | U,V,W (feeder) |
+| Socket 1p | Steckdose | L,N,PE |
+
+The symbols from *Disconnector* on are produced by `tools/make_symbols_einpolig_extra.py`
+(it never overwrites existing files; `--force` replaces them).
+
 ## Notes
 
 * The symbols are **simplified drawings in the spirit of IEC 60617 / DIN EN 60617**,

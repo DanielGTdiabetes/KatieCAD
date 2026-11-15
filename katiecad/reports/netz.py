@@ -34,7 +34,7 @@ ADER_TOL = 1.0          # mm: wire -> nearest core crossing of the cable
 
 class Knoten:
     __slots__ = ("blatt", "x", "y", "art", "bes", "kennz", "name", "seite",
-                 "kanten", "text", "qv_art", "partner")
+                 "kanten", "text", "qv_art", "partner", "draht", "draht_daten")
 
     def __init__(self, blatt, x, y, art, bes=None, kennz="", name="",
                  seite="", text="", qv_art=""):
@@ -47,6 +47,8 @@ class Knoten:
         self.text = text                # Cross-reference text
         self.qv_art = qv_art
         self.partner = []               # Cross-reference counterparts
+        self.draht = ""                 # Wire number (from a Drahtnummer label)
+        self.draht_daten = ("", "")     # (colour, cross-section) of that wire
 
 
 class Kante:
@@ -100,6 +102,7 @@ class Netz:
         self.klemmen = []        # {"obj", "blatt", "oben", "unten"}
         self.kabel = []          # {"obj", "blatt", "adern": [{"name","kanten"}]}
         self._leitung = {}       # id(wire) -> edge
+        self._leitungen = []     # [(sheet, wire, edge)]
 
     # ---- Construction ---------------------------------------------
     def _neu(self, blatt, x, y, art, **kw):
@@ -198,6 +201,7 @@ class Netz:
             k = _verbinden(a, b)
             if k is not None:
                 self._leitung[id(l)] = k
+                self._leitungen.append((blatt, l, k))
         self._kabel_adern(blatt, elemente)
 
     def _kabel_adern(self, blatt, elemente):
@@ -247,12 +251,20 @@ class Netz:
     def aufbauen(cls, blaetter):
         """blaetter: [(key, elements), ...]"""
         netz = cls()
+        blaetter = list(blaetter)
         for schluessel, elemente in blaetter:
             netz.blatt_hinzufuegen(schluessel, elemente)
         netz.abschliessen()
+        # wire numbers of the Drahtnummer labels -> nodes (import here: no cycle)
+        from katiecad.electrical.drahtnummern import netz_nummern
+        netz_nummern(netz, blaetter)
         return netz
 
     # ---- Queries ----------------------------------------------------
+    def leitung_kanten(self):
+        """[((sheet, wire), edge)] of all drawn wire pieces."""
+        return [((b, l), k) for b, l, k in self._leitungen]
+
     def ziele(self, start, ohne=()):
         """All end points reachable from `start`.
         -> [(node, cable_infos)], cable_infos = ((CAB, core), ...)

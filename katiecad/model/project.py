@@ -232,12 +232,12 @@ class Projekt:
         return False
 
     # ---- Sheets ------------------------------------------------
-    def neuer_blattname(self):
+    def neuer_blattname(self, bezeichnung="Blatt"):
         i = len(self.blaetter) + 1
         namen = {b.name for b in self.blaetter}
-        while f"Blatt {i}" in namen:
+        while f"{bezeichnung} {i}" in namen:
             i += 1
-        return f"Blatt {i}"
+        return f"{bezeichnung} {i}"
 
     def blatt_hinzufuegen(self, name=None, nach_index=None):
         """Registers a new sheet (the caller writes the file)."""
@@ -284,13 +284,13 @@ class Projekt:
             self.blaetter.insert(max(0, position), b)
         return b
 
-    def kopie_name(self, name):
+    def kopie_name(self, name, zusatz="Kopie"):
         """Free name for a copy: 'X (Kopie)', 'X (Kopie 2)', ..."""
         namen = {b.name for b in self.blaetter}
-        kandidat = f"{name} (Kopie)"
+        kandidat = f"{name} ({zusatz})"
         i = 2
         while kandidat in namen:
-            kandidat = f"{name} (Kopie {i})"
+            kandidat = f"{name} ({zusatz} {i})"
             i += 1
         return kandidat
 

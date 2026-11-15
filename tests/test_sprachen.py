@@ -13,6 +13,14 @@ def check(c, m):
     ok += 1
 
 T = I.TEXTE
+# no key twice in one language (Python keeps the last one silently)
+_quelle = open(I.__file__, encoding="utf-8").read()
+_teile = re.split(r'\n    "(?:de|en|es)": \{', _quelle)[1:]
+check(len(_teile) == 3, f"drei Sprachbloecke gefunden: {len(_teile)}")
+for _teil in _teile:
+    _keys = re.findall(r'^        "([^"]+)":', _teil, re.M)
+    _doppelt = sorted({k for k in _keys if _keys.count(k) > 1})
+    check(not _doppelt, f"Schluessel doppelt: {_doppelt}")
 check(set(T) == {"de", "en", "es"}, "Sprachen de/en/es")
 for sp in ("en", "es"):
     check(set(T[sp]) == set(T["de"]), f"{sp}: gleiche Schluessel wie de: {sorted(set(T['de']) ^ set(T[sp]))[:5]}")

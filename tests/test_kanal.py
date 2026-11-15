@@ -95,6 +95,15 @@ _a = _A()
 check(_a._leiste_ablegen("bau", 210, 10) and _a._tb_reihe == ["werkzeug", "elektro", "bau", "3d"], "Bau vor 3D ablegen")
 _a = _A()
 check(_a._leiste_ablegen("bau", 190, 10) and _a._tb_reihe == ["werkzeug", "elektro", "bau", "3d"], "Bau hinter Elektro ablegen")
+standard = ("vpunkt", "verbindung", "verbindung_ecke", "verbindung_abzweig")
+gespeichert = {"reihenfolge": ["verbindung", "alt", "verbindung", "vpunkt"],
+               "ausgeblendet": ["vpunkt", "alt"]}
+check(TD.knopf_optionen(standard, gespeichert) ==
+      (["verbindung", "vpunkt", "verbindung_ecke", "verbindung_abzweig"], {"vpunkt"}),
+      "Toolbar behält Auswahl, ignoriert alte IDs und ergänzt neue Schaltflächen")
+check(TD.knopf_optionen(standard, {"reihenfolge": "ungültig"}) == (list(standard), set()),
+      "Toolbar nutzt Standard bei ungültigen Einstellungen")
+check(all(key in icons.NAMEN for key in standard), "Icons für Ecke und T-Abzweig")
 
 # 3D body
 prof = core.kanal_rechteck((0, 0), (1000, 0), 60)

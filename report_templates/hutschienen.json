@@ -1,0 +1,34 @@
+{
+  "_hinweis": "Tragschienen-Katalog / catálogo de carril DIN: breite = Profilbreite, hoehe = Profilhöhe (mm), max_laenge = Stangenlänge. Referenzen: Weidmüller (3Dfindit), bitte prüfen. Eine Kopie in <Projekt>/report_templates hat Vorrang.",
+  "max_laenge": 2000,
+  "kanaele": [
+    {
+      "name": "TS 35 x 7,5",
+      "breite": 35,
+      "hoehe": 7.5,
+      "hersteller": "Weidmüller",
+      "ref": "0383400000"
+    },
+    {
+      "name": "TS 35 x 15",
+      "breite": 35,
+      "hoehe": 15,
+      "hersteller": "Weidmüller",
+      "ref": "0236400000"
+    },
+    {
+      "name": "TS 32 x 15",
+      "breite": 32,
+      "hoehe": 15,
+      "hersteller": "Weidmüller",
+      "ref": "0122800000"
+    },
+    {
+      "name": "TS 15 x 5,5",
+      "breite": 15,
+      "hoehe": 5.5,
+      "hersteller": "Weidmüller",
+      "ref": "0117500000"
+    }
+  ]
+}

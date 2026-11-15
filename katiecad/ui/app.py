@@ -60,12 +60,14 @@ from katiecad.ui.toolbar_dock import ToolbarDockMixin
 from katiecad.model import geom2d as G2
 from katiecad.model import auswahl as AUSW
 from katiecad.electrical import nummerierung as NUM
+from katiecad.electrical import drahtnummern as DN
+from katiecad.fileio import dxf_linientypen as DLT
 from katiecad.model.geom2d import spline_punkte
 from katiecad.ui.sidebar import Seitenleiste
 from katiecad.ui.widgets import FlatButton, farb_swatch, Tooltip
 import katiecad.model.core as core
 from katiecad.model.core import (
-    FARBEN, FARBSCHEMEN, FARBSCHEMA, farbschema_anwenden, EINHEITEN, ZEICHNUNGSFORMATE, MASSSTAEBE, LINIENTYPEN,
+    FARBEN, FARBSCHEMEN, FARBSCHEMA, farbschema_anwenden, EINHEITEN, ZEICHNUNGSFORMATE, MASSSTAEBE, LINIENTYPEN, linientyp_text, linientyp_schluessel, linientypen_texte,
     schrift_fett, schrift_name, schrift_setzen, schriftarten_aktualisieren, SCHRIFTEN,
     RASTER_GROESSEN, BG_PRESETS, RASTER_PRESETS, farbe_mischen, SCHRIFTARTEN, LINIENSTAERKEN,
     GRIFF_RADIUS, MIN_VP_GROESSE, PASTE_OFFSET_MM,
@@ -76,7 +78,7 @@ from katiecad.model.core import (
     Ellipse, Spline, Wand, Kabelkanal, kanal_kette, kanal_versatz, KANAL_LAYER, KANAL_LAYER_FARBE, kanal_formstueck, kanal_aus_koerper, _variantenname, Oeffnung, Raum, RAUM_LAYER, RAUM_LAYER_FARBE, WAND_LAYER, WAND_LAYER_FARBE,
     wand_verknuepfen, wand_in_linien, wand_verbinden, wand_schliessen,
     Bemassung, Viewport, Schraffur, Bild, konturen_aus_elementen, bereich_an_punkt,
-    AttributDefinition, Leitung, Verbindungspunkt, Querverweis,
+    AttributDefinition, Leitung, Verbindungspunkt, Querverweis, Drahtnummer,
     Verbindung, ElektroMaske, Klemme, Kabel, Koordinatenfeld, ZUSAMMENGESETZT,
     Koerper3D, Gruppe3D, Skizze3D, Bemassung3D, Text3D,
     vp_tags_eindeutig, LEITUNG_FARBE, UI_SCHRIFT,
@@ -91,6 +93,7 @@ from katiecad.model.core import (
     teile_bogen_durch_winkel,
 )
 from katiecad.ui.dialogs import (
+    DrahtnummernDialog, UmbenennenDialog, KlemmenNummernDialog, KlemmenleisteDialog,
     farbe_waehlen, VON_LAYER,
     LICENSE_TEXT, zeige_lizenz_fenster,
     _LayoutNameDialog, BlattEigenschaftenDialog, PropertiesDialog, ViewportDialog,
@@ -100,8 +103,8 @@ from katiecad.ui.dialogs import (
     ProjektNeuDialog, AttributDefinitionDialog, BlockAttributeDialog,
     MasstextDialog, WandDialog, KanalDialog, OeffnungDialog, RaumDialog, BauteilkatalogDialog, SchnellauswahlDialog, SuchenErsetzenDialog, QuerverweisDialog, PruefungDialog, EigenschaftenPalette, VerbindungspunkteDialog, ProjektDruckDialog,
     VerbindungspunktDialog, VerbindungDialog, FestMaskeDialog,
-    KoordinatenfeldDialog,
-    TitleBlockDialog, DokumentationDialog, ListenAuswahlDialog, SchriftenDialog, ProjektEigenschaftenDialog,
+    KoordinatenfeldDialog, VerbindungsformDialog, ToolbarKnopfDialog,
+    TitleBlockDialog, DokumentationDialog, ListenAuswahlDialog, MPrintDialog, VersatzDialog, SchriftenDialog, ProjektEigenschaftenDialog,
 )
 from katiecad.reports import seiten as SEI, anwenden as ANW
 from katiecad.fileio.pdf import pdf_erzeugen, pdf_senden, pdf_mehrseitig_erzeugen
@@ -112,7 +115,7 @@ from katiecad.electrical.logic import (leitungen_automatisch, kabel_kreuzungen, 
                               geraete_aus_blattdaten, geraete_referenzen,
                               naechster_leitungspunkt, leitung_teilen,
                               vollstaendige_verbindungen, vollstaendige_leitungen,
-                              leitungen_einrasten,
+                              leitungen_einrasten, pins_ausrichten,
                               verbindungen_bereinigen)
 from types import SimpleNamespace
 
@@ -251,6 +254,9 @@ _KULL_TYPEN = (Linie, Kreis, Bogen, Polylinie, Schraffur, Text)
 _KULL_WINZIG = (Linie, Kreis, Bogen, Polylinie)
 
 
+MIN_TEXT_PX = 5.0       # screen clean-up: texts lower than this are not drawn
+
+
 class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
     def __init__(self, root):
         self.root = root
@@ -301,7 +307,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
 
         self.elemente = []
 
-        self.layouts = [Layout("Layout1", Layout.STANDARD_FORMAT,
+        self.layouts = [Layout(tr("name.layout", n=1), Layout.STANDARD_FORMAT,
                                "#1c132d")]
         self.aktives_layout = 0
         # drawing backgrounds are a setting of the program, not part of the drawing file
@@ -391,6 +397,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self._vp_letzte_bez = ""
         self._vp_text_anzeigen = True
         self._qv_cache = {}
+        self._draht_einst = {}          # wire numbering settings without project
         self._ge_cache = {}
         self._vb_vorgabe = None
         self._vp_vorgabe = None
@@ -448,6 +455,11 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         core.XREF_LADER = self._xref_datei_laden
         core.XREF_BASIS = self._xref_basis
         self.leistung_var = tk.BooleanVar(value=False)       # shows redraw times (not saved)
+        _cfg = lade_konfiguration()
+        # pin magnet: inserted/moved devices snap onto pins up to 1.5 mm beside them (saved)
+        self.pin_magnet_var = tk.BooleanVar(value=bool(_cfg.get("pin_magnet", True)))
+        # screen: hide empty mask fields and details too small to read (saved)
+        self.detail_aufraeumen_var = tk.BooleanVar(value=bool(_cfg.get("detail_aufraeumen", True)))
         self.dxf_iso_var = tk.StringVar(
             value="linien" if lade_konfiguration().get("dxf_iso") == "linien" else "text")
         self._pts = []
@@ -1183,6 +1195,14 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         m_projekt.add_separator()
         m_projekt.add_command(label=tr("menu.projekt.nummerieren"),
                               command=self.geraete_nummerieren)
+        m_projekt.add_command(label=tr("menu.projekt.umbenennen_zaehler"),
+                              command=self.geraete_umbenennen)
+        m_projekt.add_command(label=tr("menu.projekt.klemmen_nummern"),
+                              command=self.klemmen_nummerieren)
+        m_projekt.add_command(label=tr("menu.projekt.klemmenleiste"),
+                              command=self.klemmenleiste_bearbeiten)
+        m_projekt.add_command(label=tr("menu.projekt.drahtnummern"),
+                              command=self.drahtnummern_vergeben)
         m_projekt.add_command(label=tr("menu.projekt.bauteile"),
                               command=self.bauteilkatalog)
         m_projekt.add_command(label=tr("menu.projekt.doku"),
@@ -1191,6 +1211,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                               command=self.dokumentation_csv)
         m_projekt.add_command(label=tr("menu.projekt.doku_excel"),
                               command=self.dokumentation_excel)
+        m_projekt.add_command(label=tr("menu.projekt.mprint"),
+                              command=self.etiketten_mprint)
         m_projekt.add_separator()
         m_projekt.add_command(label=tr("menu.projekt.loeschen"),
                               command=self.projekt_loeschen)
@@ -1228,6 +1250,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         #    trim, break, fillet, chamfer, align
         m_bearb.add_command(label=tr("menu.bearbeiten.verschieben"),
                             command=lambda: self._op_start("move"))
+        m_bearb.add_command(label=tr("menu.bearbeiten.versatz_verschieben"),
+                            command=self.versatz_verschieben)
         m_bearb.add_command(label=tr("menu.bearbeiten.drehen"),
                             command=lambda: self._op_start("rotate"))
         m_bearb.add_command(label=tr("menu.bearbeiten.skalieren"),
@@ -1324,6 +1348,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                            command=lambda: self._werkzeug_aus_menue("raum"))
         m_einf.add_command(label=tr("menu.einfuegen.kanal"),
                            command=lambda: self._werkzeug_aus_menue("kanal"))
+        m_einf.add_command(label=tr("menu.einfuegen.schiene"), command=self.schiene_werkzeug)
         m_einf.add_command(label=tr("menu.einfuegen.kanalverb"),
                            command=lambda: self._werkzeug_aus_menue("kanalverb"))
         m_einf.add_separator()
@@ -1391,6 +1416,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                             command=lambda n=_name: self.toolbar_verschieben(n, -1))
             m_n.add_command(label=tr("menu.ansicht.tb_zurueck"),
                             command=lambda n=_name: self.toolbar_verschieben(n, 1))
+            m_n.add_command(label=tr("menu.ansicht.tb_anpassen"),
+                            command=lambda n=_name: self.toolbar_anpassen(n))
             m_tb.add_cascade(label=tr("menu.ansicht.tb_" + _name), menu=m_n)
         m_ansicht.add_cascade(label=tr("menu.ansicht.tb"), menu=m_tb)
         m_ansicht.add_command(label=tr("menu.ansicht.zoom_grenzen"),
@@ -1441,6 +1468,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                               command=lambda: self._werkzeug_setzen("verbindung"))
         m_elektro.add_command(label=tr("menu.elektro.querverweis"),
                               command=lambda: self._werkzeug_setzen("querverweis"))
+        m_elektro.add_command(label=tr("menu.elektro.modell3d"), command=self.modell3d_zuweisen)
         m_elektro.add_separator()
         m_elektro.add_command(label=tr("menu.elektro.maske"),
                               command=lambda: self._werkzeug_setzen("maske"))
@@ -1471,6 +1499,12 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         m_3d.add_separator()
         m_3d.add_command(label=tr("menu.3d.loch"),
                          command=lambda: self.ansicht3d_befehl("loch"))
+        m_3d.add_command(label=tr("menu.3d.mechanik"),
+                         command=lambda: self.ansicht3d_befehl("mechanik"))
+        m_3d.add_command(label=tr("menu.3d.modell"),
+                         command=lambda: self.ansicht3d_befehl("modell"))
+        m_3d.add_command(label=tr("menu.3d.platzieren"),
+                         command=lambda: self.ansicht3d_befehl("platzieren"))
         m_3d.add_command(label=tr("menu.3d.mass"),
                          command=lambda: self.ansicht3d_befehl("mass"))
         m_3d.add_command(label=tr("menu.3d.drehen"),
@@ -1532,6 +1566,15 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         m_einst.add_cascade(label=tr("menu.einst.dxfiso"), menu=m_dxfiso)
         m_einst.add_checkbutton(label=tr("menu.einst.leistung"), variable=self.leistung_var,
                                 command=self.redraw)
+        m_einst.add_separator()
+        m_einst.add_checkbutton(label=tr("menu.einst.pin_magnet"), variable=self.pin_magnet_var,
+                                command=lambda: self._einst_speichern(
+                                    "pin_magnet", self.pin_magnet_var.get()))
+        m_einst.add_checkbutton(label=tr("menu.einst.detail_aufraeumen"),
+                                variable=self.detail_aufraeumen_var,
+                                command=lambda: (self._einst_speichern(
+                                    "detail_aufraeumen", self.detail_aufraeumen_var.get()),
+                                    self.redraw()))
         menubar.add_cascade(label=tr("menu.einstellungen"), menu=m_einst)
 
         # Help
@@ -1597,8 +1640,16 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         Tooltip(griff, tr("tb.griff"))
         self._toolbar_griff_binden(griff, name)
 
+    def toolbar_anpassen(self, name):
+        reihe, ausgeblendet = self.toolbar_knopf_optionen(name)
+        dlg = ToolbarKnopfDialog(self.root, tr("menu.ansicht.tb_" + name),
+                                 self.toolbar_eintraege(name), reihe, ausgeblendet)
+        if dlg.result is not None:
+            self.toolbar_knopf_optionen_setzen(name, *dlg.result)
+
     def _build_toolbars(self):
         self._wz_knoepfe = {}
+        self._tb_info = {}
         for attr in ("tb1", "tbB", "tbE", "tbD", "tb2", "tb3"):
             if not hasattr(self, attr):
                 frm = ttk.Frame(self.root, padding=4)
@@ -1636,7 +1687,11 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self._leisten_griff(tb, "elektro")
         ttk.Label(tb, text=tr("menu.elektro") + ":",
                   style="Elektro.TLabel").pack(side=tk.LEFT, padx=(0, 4))
-        for key in ("vpunkt", "verbindung", "querverweis",
+        self._werkzeug_knopf(tb, "vpunkt", ICON_ROT)
+        for form in ("ecke", "abzweig"):
+            self._befehl_knopf(tb, "verbindung_" + form, ICON_ROT,
+                               lambda f=form: self._verbindungswerkzeug(f))
+        for key in ("verbindung", "querverweis",
                     "klemme", "kabel", "koordinatenfeld", "ftext", "maske"):
             self._werkzeug_knopf(tb, key, ICON_ROT)
 
@@ -1672,11 +1727,19 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self._layer_info_aktualisieren()
         ttk.Separator(tb2, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=8)
         ttk.Label(tb2, text=tr("tb.linientyp"), style="Title.TLabel").pack(side=tk.LEFT)
-        cb_lt = ttk.Combobox(tb2, textvariable=self.linientyp,
-                             values=list(LINIENTYPEN.keys()),
-                             width=18, state="readonly")
+        # shows the translated name; self.linientyp keeps the stored key
+        self._lt_anzeige = tk.StringVar(value=linientyp_text(self.linientyp.get()))
+        self.linientyp.trace_add("write", lambda *_: self._lt_anzeige.set(
+            linientyp_text(self.linientyp.get())))
+        cb_lt = ttk.Combobox(tb2, textvariable=self._lt_anzeige,
+                             values=linientypen_texte(),
+                             width=20, state="readonly")
         cb_lt.pack(side=tk.LEFT, padx=4)
-        cb_lt.bind("<<ComboboxSelected>>", self._stil_auf_auswahl)
+
+        def _lt_gewaehlt(event=None):
+            self.linientyp.set(linientyp_schluessel(self._lt_anzeige.get()))
+            self._stil_auf_auswahl(event)
+        cb_lt.bind("<<ComboboxSelected>>", _lt_gewaehlt)
         ttk.Label(tb2, text="  " + tr("tb.staerke"), style="Title.TLabel").pack(side=tk.LEFT)
         cb_ls = ttk.Combobox(tb2, textvariable=self.linienstaerke,
                              values=[tr("tb.von_layer")] + [str(s) for s in LINIENSTAERKEN],
@@ -1899,11 +1962,12 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self._mark_dirty()
 
     def neues_layout(self):
-        name = f"Layout{len(self.layouts) + 1}"
-        basis = len(self.layouts)
-        while any(l.name == name for l in self.layouts):
+        basis = len(self.layouts) + 1
+        namen = {lay.name for lay in self.layouts}
+        name = tr("name.layout", n=basis)
+        while name in namen:
             basis += 1
-            name = f"Layout{basis}"
+            name = tr("name.layout", n=basis)
         self._snapshot()
         self.layouts.append(Layout(name, self.layout_format, self.bg_layout))
         self._layout_switcher_neu_aufbauen()
@@ -2083,6 +2147,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                                 variable=self.aktives_werkzeug,
                                 command=self._werkzeug_toolbar)
             b.pack(side=tk.LEFT)
+            b._toolbar_eintrag = (key, text)
             self._wz_knoepfe[key] = b
             return
         if not hasattr(self, "_toolbar_icons"):
@@ -2092,6 +2157,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                             variable=self.aktives_werkzeug,
                             command=self._werkzeug_toolbar)
         b.pack(side=tk.LEFT, padx=1)
+        b._toolbar_eintrag = (key, text)
         self._wz_knoepfe[key] = b
         Tooltip(b, text)
 
@@ -2107,8 +2173,9 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             except tk.TclError:
                 bild = None
         if bild is None:
-            ttk.Checkbutton(parent, text=text, variable=var, command=befehl
-                            ).pack(side=tk.LEFT, padx=1)
+            b = ttk.Checkbutton(parent, text=text, variable=var, command=befehl)
+            b.pack(side=tk.LEFT, padx=1)
+            b._toolbar_eintrag = (key, text)
             return
         if not hasattr(self, "_toolbar_icons"):
             self._toolbar_icons = {}
@@ -2116,6 +2183,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         b = ttk.Checkbutton(parent, image=bild, style="Icon.Toolbutton",
                             variable=var, command=befehl)
         b.pack(side=tk.LEFT, padx=1)
+        b._toolbar_eintrag = (key, text)
         Tooltip(b, text)
 
     def _befehl_knopf(self, parent, key, farbe, befehl, textkey=None):
@@ -2132,6 +2200,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         if bild is None:
             b = ttk.Button(parent, text=text, command=befehl)
             b.pack(side=tk.LEFT, padx=1)
+            b._toolbar_eintrag = (key, text)
             self._wz_knoepfe["cmd:" + key] = b
             return
         if not hasattr(self, "_toolbar_icons"):
@@ -2139,6 +2208,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self._toolbar_icons[(key, str(parent))] = bild
         b = ttk.Button(parent, image=bild, style="Icon.Toolbutton", command=befehl)
         b.pack(side=tk.LEFT, padx=1)
+        b._toolbar_eintrag = (key, text)
         self._wz_knoepfe["cmd:" + key] = b
         Tooltip(b, text)
 
@@ -2627,36 +2697,37 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
     def layer_verwalten(self):
         LayerDialog(self.root, self)
 
-    def zoom_grenzen(self, event=None):
-        liste = self.elemente if not self._ist_layout() else self.layout_elemente
+    def zoom_grenzen(self, event=None, *, grenzen=None):
         cw = self.canvas.winfo_width() or 1200
         ch = self.canvas.winfo_height() or 700
-        if not liste:
-            self.view["zoom"] = 1.5
-            self.view["ox"] = cw / 2
-            self.view["oy"] = ch / 2
-            self.redraw()
-            self._zeichne_raster()
-            self.status.set(tr("txt.0070"))
-            return
-        xs, ys = [], []
-        for el in liste:
-            if not self._ist_layout():                 # hidden layers do not count
-                l = self.layers.get(getattr(el, "layer", None))
-                if l is not None and not l.sichtbar:
+        if grenzen is None:
+            liste = self.elemente if not self._ist_layout() else self.layout_elemente
+            if not liste:
+                self.view["zoom"] = 1.5
+                self.view["ox"] = cw / 2
+                self.view["oy"] = ch / 2
+                self.redraw()
+                self._zeichne_raster()
+                self.status.set(tr("txt.0070"))
+                return
+            xs, ys = [], []
+            for el in liste:
+                if not self._ist_layout():             # hidden layers do not count
+                    l = self.layers.get(getattr(el, "layer", None))
+                    if l is not None and not l.sichtbar:
+                        continue
+                try:
+                    b = el.bbox()
+                except Exception:
                     continue
-            try:
-                b = el.bbox()
-            except Exception:
-                continue
-            if not b or not all(isinstance(w, (int, float)) and math.isfinite(w) for w in b[:4]):
-                continue
-            xs.extend([b[0], b[2]])
-            ys.extend([b[1], b[3]])
-        if not xs or not ys:
-            return
-        minx, maxx = min(xs), max(xs)
-        miny, maxy = min(ys), max(ys)
+                if not b or not all(isinstance(w, (int, float)) and math.isfinite(w) for w in b[:4]):
+                    continue
+                xs.extend([b[0], b[2]])
+                ys.extend([b[1], b[3]])
+            if not xs or not ys:
+                return
+            grenzen = (min(xs), min(ys), max(xs), max(ys))
+        minx, miny, maxx, maxy = grenzen
         bw = maxx - minx
         bh = maxy - miny
         if bw < 1e-6: bw = 10.0
@@ -2837,11 +2908,11 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self.redraw()
         self.status.set(tr("txt.0013"))
 
-    def _werkzeug_gewechselt(self):
-        self._werkzeug_gewechselt_2d()
+    def _werkzeug_gewechselt(self, verbindungsform=None):
+        self._werkzeug_gewechselt_2d(verbindungsform)
         self.ansicht3d_werkzeug()           # in 3D: basic tools act on the work plane
 
-    def _werkzeug_gewechselt_2d(self):
+    def _werkzeug_gewechselt_2d(self, verbindungsform=None):
         self._kabel_p1 = None
         self._leitung_beenden()
         self.letzter_punkt = None
@@ -2883,7 +2954,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             elif wz == "querverweis":
                 self._querverweis_starten()
             elif wz == "verbindung":
-                self._verbindung_starten()
+                self._verbindung_starten(verbindungsform)
             elif wz == "vpunkt":
                 self._vp_starten()
             elif wz == "maske":
@@ -3848,12 +3919,12 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             f"[{ansicht_name}]  "
             f"X = {pt[0] / einh:8.2f} {unit}   Y = {pt[1] / einh:8.2f} {unit}   |   "
             f"Zoom {self.view['zoom']:.2f}   |   "
-            f"{'Layer'}: {self.aktiver_layer.get()}   |   "
+            f"{tr('tb.layer')} {self.aktiver_layer.get()}   |   "
             f"{tr('txt.0195')}: {len(self.auswahl)}   |   "
-            f"OFang: {'AN' if self.osnap.get() else 'AUS'}   "
-            f"{tr('txt.0196')}: {'AN' if self.grid_snap.get() else 'AUS'} "
+            f"{tr('txt.0276')}: {tr('status.an' if self.osnap.get() else 'status.aus')}   "
+            f"{tr('txt.0196')}: {tr('status.an' if self.grid_snap.get() else 'status.aus')} "
             f"({self._zahl(self.fang_mm, 5):g})   "
-            f"Ortho: {'AN' if self.ortho.get() else 'AUS'}" + modus_info)
+            f"{tr('sb.ortho')}: {tr('status.an' if self.ortho.get() else 'status.aus')}" + modus_info)
 
     # ---- external references (XREF) -------------------------------------------
     def _xref_basis(self):
@@ -4470,7 +4541,9 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self._leitung_klick(x, y)
             return
         if werkzeug != "auswahl":
-            if werkzeug in ("wandverb", "kanalverb") or (werkzeug == "bemassung" and not self._pts
+            if werkzeug == "verbindung":
+                pt = self._verbindung_eingabepunkt(event)
+            elif werkzeug in ("wandverb", "kanalverb") or (werkzeug == "bemassung" and not self._pts
                                           and self.bem_art.get() in ("radius", "durchmesser")):
                 pt = self._px_zu_ctx(event.x, event.y)
             else:
@@ -4558,6 +4631,9 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                     return
                 if math.hypot(pt[0] - lp[0], pt[1] - lp[1]) < 1e-9:
                     return
+                if werkzeug == "kanal":                  # a duct stops at the bar length
+                    from katiecad.model.kanal_katalog import begrenzen
+                    pt = begrenzen(lp, pt, self._kanal_max_laenge())
                 self.aktuelle_polylinie.append(pt)
             self.letzter_punkt = pt
         elif werkzeug == "kreis":
@@ -5075,6 +5151,9 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         if isinstance(el, Querverweis):
             self._qv_bearbeiten(el)
             return
+        if isinstance(el, Drahtnummer):
+            self._drahtnummer_bearbeiten(el)
+            return
         if isinstance(el, Verbindung):
             self._verbindung_bearbeiten(el)
             return
@@ -5267,6 +5346,151 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
     _kanal_breite = 60.0
     _kanal_hoehe = 40.0
     _kanal_ausrichtung = "mitte"
+    _kanal_ref = ""
+    _kanal_max = None             # bar length (mm); None = from the catalogue
+    _kanal_schiene = False        # the duct tool draws DIN rails
+    _schiene_angefordert = False
+    _kanal_saetze = None          # remembered sizes per kind: {"kanal": (...), "schiene": (...)}
+
+    def schiene_werkzeug(self):
+        """Insert > DIN rail: the duct tool in rail mode (rail catalogue, bars of max. length)."""
+        self._schiene_angefordert = True
+        self._werkzeug_aus_menue("kanal")
+
+    def _kanal_satz_wechseln(self, schiene):
+        """Keeps the sizes of ducts and rails apart when switching between them."""
+        saetze = self._kanal_saetze or {"kanal": (60.0, 40.0, "", None),
+                                         "schiene": (35.0, 7.5, "", None)}
+        alt = "schiene" if self._kanal_schiene else "kanal"
+        saetze[alt] = (self._kanal_breite, self._kanal_hoehe, self._kanal_ref, self._kanal_max)
+        neu = "schiene" if schiene else "kanal"
+        self._kanal_breite, self._kanal_hoehe, self._kanal_ref, self._kanal_max = saetze[neu]
+        self._kanal_saetze = saetze
+        self._kanal_schiene = bool(schiene)
+
+    def _kanal_katalog(self):
+        """Duct catalogue (report_templates/kanal_katalog.json) or, in rail mode, the DIN rail
+        catalogue (hutschienen.json) of the program and the project."""
+        from katiecad.model.kanal_katalog import katalog_laden, DATEI, DATEI_SCHIENE
+        programm = os.path.dirname(TB.program_folder())
+        p = getattr(self, "projekt", None)
+        return katalog_laden(SEI.spalten_ordner(programm, p.ordner if p else None),
+                             DATEI_SCHIENE if self._kanal_schiene else DATEI)
+
+    def modell3d_konvertieren(self, pfad, einst):
+        """STEP / STL -> .katie3d in the project folder 3D (or next to the source without a
+        project). -> path to store (relative to the project) or None (message shown)."""
+        from katiecad.fileio import modell3d as MD
+        p = self.projekt
+        if pfad.lower().endswith(".katie3d"):
+            ziel = pfad
+        else:
+            ordner = os.path.join(p.ordner, "3D") if p is not None else os.path.dirname(pfad)
+            ziel = MD.cache_pfad(ordner, pfad, einst["front"])
+            self.root.config(cursor="watch")
+            self.root.update_idletasks()
+            try:
+                MD.laden_oder_importieren(pfad, ziel, einst["front"], einst["toleranz"],
+                                          einst.get("punkte"))
+            except MD.PunkteFehler as ex:
+                messagebox.showerror(tr("d3.modell.titel"), tr("d3.modell.punkte_fehler", p=str(ex)),
+                                     parent=self.root)
+                return None
+            except (MD.ModellFehler, OSError, ValueError) as ex:
+                messagebox.showerror(tr("d3.modell.titel"), str(ex), parent=self.root)
+                return None
+            finally:
+                self.root.config(cursor="")
+        if p is not None:
+            try:
+                rel = os.path.relpath(ziel, p.ordner)
+                if not rel.startswith(".."):
+                    return rel.replace(os.sep, "/")
+            except ValueError:
+                pass
+        return ziel
+
+    def modell3d_pfad(self, gespeichert):
+        """Absolute path of a stored model path (relative to the project folder)."""
+        p = self.projekt
+        if p is not None and gespeichert and not os.path.isabs(gespeichert):
+            return os.path.join(p.ordner, gespeichert)
+        return gespeichert
+
+    def modell3d_zuweisen(self):
+        """Electrical > Assign 3D model: the selected devices (or all of their type) get a
+        STEP / STL model; in 3D, 'Place devices' then offers them."""
+        from katiecad.fileio import modell3d as MD
+        from katiecad.model import geraete3d as G3
+        from katiecad.ui.ansicht3d import ModellImportDialog
+        geraete = [e for e in self.auswahl if isinstance(e, BlockReferenz)
+                   and e.geraet_maske() is not None]
+        if not geraete:
+            self.status.set(tr("msg.modell3d.keine_auswahl"))
+            return
+        pfad = filedialog.askopenfilename(
+            parent=self.root, title=tr("menu.elektro.modell3d"),
+            filetypes=[(tr("d3.modell.typen"), "*.step *.stp *.STEP *.STP *.stl *.STL *.katie3d"),
+                       ("*.*", "*.*")])
+        if not pfad:
+            return
+        ext = os.path.splitext(pfad)[1].lower()
+        if ext in (".step", ".stp") and not MD.ocp_verfuegbar():
+            messagebox.showerror(tr("d3.modell.titel"), tr("d3.modell.ocp_fehlt"), parent=self.root)
+            return
+        einst = {"front": "+Z", "toleranz": 0.5}
+        if ext != ".katie3d":
+            p = self.projekt
+            ordner = os.path.join(p.ordner, "3D") if p is not None else os.path.dirname(pfad)
+            dlg = ModellImportDialog(self.root, os.path.basename(pfad), ext in (".step", ".stp"),
+                                     vorgabe=lambda front: MD.vorgabe_punkte(ordner, pfad, front))
+            self.root.wait_window(dlg)
+            if not dlg.result:
+                return
+            einst = dlg.result
+        rel = self.modell3d_konvertieren(pfad, einst)
+        if not rel:
+            return
+        from katiecad.ui.dialogs import ModellZielDialog
+        typen = sorted({G3._typ(g) for g in geraete if G3._typ(g)})
+        namen = sorted({g.block_name for g in geraete if g.block_name})
+        p = self.projekt
+        ziel = "geraet"
+        if p is not None and (typen or namen):
+            dlg = ModellZielDialog(self.root, len(geraete), typen, namen)
+            if dlg.result is None:
+                return
+            ziel = dlg.result
+        self._snapshot()
+        if ziel == "symbol":
+            tab = dict(p.daten.get("symbol_modelle", {}))
+            G3.symbol_setzen(tab, namen, rel)
+            p.daten["symbol_modelle"] = tab
+            p.speichern()
+            self.status.set(tr("msg.modell3d.symbol_gesetzt", n=len(namen), datei=rel))
+        elif ziel == "artikel":
+            kat = list(p.daten.get("bauteile", []))
+            for t in typen:
+                man = next((G3._man(g) for g in geraete if G3._typ(g) == t), "")
+                G3.artikel_setzen(kat, t, rel, man)
+            p.daten["bauteile"] = kat
+            p.speichern()
+            self.status.set(tr("msg.modell3d.typ_gesetzt", n=len(typen), datei=rel))
+        else:
+            n = G3.geraet_setzen(geraete, rel)
+            self.status.set(tr("msg.modell3d.gesetzt", n=n, datei=rel))
+
+    def _mechanik_vorlagen(self):
+        """Machining templates of the program and the project (report_templates/mecanizado.json)."""
+        from katiecad.model.mechanik import vorlagen_laden
+        programm = os.path.dirname(TB.program_folder())
+        p = getattr(self, "projekt", None)
+        return vorlagen_laden(SEI.spalten_ordner(programm, p.ordner if p else None))
+
+    def _kanal_max_laenge(self):
+        if self._kanal_max:
+            return self._kanal_max
+        return self._kanal_katalog()["max_laenge"]
     _kanal_schraffur = ""
     _kanal_schraffur_abstand = 20.0
     _kanal_verb_erste = None
@@ -5292,17 +5516,26 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         return daten
 
     def _kanal_werkzeug_start(self):
-        """Cable duct tool selected: ask width (3D: and height), create the layer."""
+        """Cable duct tool selected: ask width (3D: and height), create the layer.
+        Started from Insert > DIN rail it draws rails (own catalogue and sizes)."""
+        self._kanal_satz_wechseln(self._schiene_angefordert)
+        self._schiene_angefordert = False
         self._kanal_layer_sicherstellen()
         mit_hoehe = self.ansicht3d_aktiv() and not self._ist_layout()
         dlg = KanalDialog(self.root, self._kanal_breite, self._kanal_hoehe, mit_hoehe=mit_hoehe,
                           ausrichtung=self._kanal_ausrichtung, schraffur=self._kanal_schraffur,
-                          schraffur_abstand=self._kanal_schraffur_abstand)
+                          schraffur_abstand=self._kanal_schraffur_abstand,
+                          katalog=self._kanal_katalog(), ref=self._kanal_ref,
+                          max_laenge=self._kanal_max_laenge(),
+                          titel=tr("dlg.schiene.titel") if self._kanal_schiene else None)
         if dlg.result is None:
             self.aktives_werkzeug.set("auswahl")
             self._werkzeug_toolbar()
             return
         self._kanal_breite = dlg.result["breite"]
+        self._kanal_ref = dlg.result.get("ref", "")
+        if dlg.result.get("max_laenge"):
+            self._kanal_max = dlg.result["max_laenge"]
         self._kanal_ausrichtung = dlg.result["ausrichtung"]
         self._kanal_schraffur = dlg.result["schraffur"]
         self._kanal_schraffur_abstand = dlg.result["schraffur_abstand"]
@@ -5316,10 +5549,12 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
 
     def _kanal_stuecke(self, punkte, geschlossen=False):
         """Straight duct pieces, one per segment of the clicked points."""
+        from katiecad.model.kanal_katalog import aufteilen
+        punkte = aufteilen(punkte, self._kanal_max_laenge())        # bars of max. length
         return [Kabelkanal([a, b], breite=self._kanal_breite, hoehe=self._kanal_hoehe,
                            schraffur=self._kanal_schraffur,
-                           schraffur_abstand=self._kanal_schraffur_abstand,
-                           **self._kanal_layer_daten())
+                           schraffur_abstand=self._kanal_schraffur_abstand, ref=self._kanal_ref,
+                           schiene=self._kanal_schiene, **self._kanal_layer_daten())
                 for a, b in kanal_kette(
                     kanal_versatz(punkte, self._kanal_ausrichtung, self._kanal_breite, geschlossen),
                     self._kanal_breite, geschlossen)]
@@ -5372,12 +5607,14 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         dlg = KanalDialog(self.root, el.breite, el.hoehe, mit_hoehe=True,
                           laenge=el.laenge() if gerade else None, titel=tr("dlg.kanal.titel"),
                           schraffur=el.schraffur, schraffur_abstand=el.schraffur_abstand,
-                          nur_schraffur=not gerade)
+                          nur_schraffur=not gerade, katalog=self._kanal_katalog(),
+                          ref=getattr(el, "ref", ""))
         if dlg.result is None:
             return
         self._snapshot()
         if gerade:
             el.breite, el.hoehe = dlg.result["breite"], dlg.result["hoehe"]
+            el.ref = dlg.result.get("ref", "")
         el.schraffur = dlg.result["schraffur"]
         el.schraffur_abstand = dlg.result["schraffur_abstand"]
         self.redraw()
@@ -5817,6 +6054,24 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             return max(basis * 2, 0.7)
         return basis
 
+    def _aufgeraeumt(self):
+        """Screen clean-up active (Settings > Hide empty fields and tiny details)."""
+        v = getattr(self, "detail_aufraeumen_var", None)
+        return v is not None and bool(v.get())
+
+    @staticmethod
+    def _ohne_vorlagewerte(el):
+        """Texts of a mask/terminal without template values: a field whose value is
+        its own name (TYP in field TYP, as a library symbol brings it) stays empty,
+        the same rule as in the reports (wert_gesetzt)."""
+        alt = el.werte
+        el.werte = {t: ("" if str(v).strip().upper() == t.upper() else v)
+                    for t, v in alt.items()}
+        try:
+            return el.aufgeloest()
+        finally:
+            el.werte = alt
+
     def _zeichne_element(self, el, tags=("element",), tf=None, skala=None,
                          clip=None, stil=None):
         if isinstance(el, ZUSAMMENGESETZT):
@@ -5824,6 +6079,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                 # dashed viewport outline only in the model view
                 kinder = el.aufgeloest(umriss=(tf is None and tags == ("element",)
                                                and not self._ist_layout()))
+            elif isinstance(el, (ElektroMaske, Klemme, Kabel)) and self._aufgeraeumt():
+                kinder = self._ohne_vorlagewerte(el)
             else:
                 kinder = el.aufgeloest()
             for kind in kinder:
@@ -5837,6 +6094,9 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         tf = tf or self.mm_to_px
         sk = skala if skala is not None else self.view["zoom"]
         clip = clip or self._sicht_rect()
+        if (isinstance(el, Text) and self._aufgeraeumt()
+                and el.hoehe * sk < MIN_TEXT_PX):
+            return                       # too small to read: only a smudge on screen
         
         if stil:
             farbe, w, dash = stil["farbe"], stil["w"], stil.get("dash")
@@ -5995,9 +6255,14 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         if not self._ist_layout():
             farbe = stil["farbe"] if stil else self._effektive_zeichenfarbe(el)
             cx, cy = tf(el.x, el.y)
-            r = max(3.0, el.radius * sk)
+            if self._aufgeraeumt():
+                # true size; when zoomed out a small dot instead of a thick ring
+                r = max(1.5, el.radius * sk)
+                breite = 2 if r >= 3.0 else 1
+            else:
+                r, breite = max(3.0, el.radius * sk), 2
             self.canvas.create_oval(cx - r, cy - r, cx + r, cy + r,
-                                    outline=farbe, width=2, tags=tags)
+                                    outline=farbe, width=breite, tags=tags)
         t = el.text_element()
         if t is not None:
             self._zeichne_element(t, tags=tags, tf=tf, skala=skala,
@@ -6297,16 +6562,16 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         """Sheet margin (left 20 mm, otherwise 5 mm) and title block from a
         template drawing (folder title_blocks). An existing title block
         is replaced."""
-        if not self._ist_layout():
-            self.status.set(tr("msg.tb.nur_layout"))
-            return
         p = self.projekt
         ordner = TB.template_folders(p.ordner if p is not None else None)
-        eintraege = [(tr("dlg.tb.ohne"), None)]
-        eintraege += [(n, pf) for n, pf in TB.list_templates(ordner)]
+        vorlagen = TB.list_templates(ordner)
+        eintraege = [(tr("dlg.tb.ohne"), None)] + vorlagen
         cfg = lade_konfiguration()
+        vorgabe = cfg.get("title_block")
+        if vorgabe != "" and not any(pfad == vorgabe for _, pfad in vorlagen):
+            vorgabe = TB.default_template(vorlagen, self.layout_format, SPRACHE["aktuell"])
         dlg = TitleBlockDialog(
-            self.root, eintraege, preselect=cfg.get("title_block"),
+            self.root, eintraege, preselect=vorgabe,
             on_open_folder=lambda: self._ordner_oeffnen(ordner[0]),
             folders_text=tr("dlg.tb.ordner_zeile", pfad=ordner[0]))
         if dlg.result is None:
@@ -6328,6 +6593,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         except Exception:
             pass
 
+        if not self._ist_layout():
+            self._ansicht_aktuelles_layout()
         self._snapshot()
         b, h = ZEICHNUNGSFORMATE[self.layout_format]
         liste = self.layout_elemente
@@ -6357,10 +6624,14 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self._attribute_abfragen(ref)
             liste.append(ref)
             self.auswahl = [ref]
+        else:
+            self.auswahl = [e for e in self.auswahl if e in liste]
+        self.root.update_idletasks()
+        self.zoom_grenzen(grenzen=aussen)
+        if elemente:
             self.status.set(tr("msg.tb.eingefuegt", name=name))
         else:
             self.status.set(tr("msg.tb.nur_rahmen"))
-        self.redraw()
 
     def schriftkopf_vorlage_speichern(self):
         """Saves the model drawing as a title block template."""
@@ -6648,7 +6919,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                 default=messagebox.NO, parent=self.root):
             return False
         self.elemente = []
-        self.layouts = [Layout("Layout1", Layout.STANDARD_FORMAT, "#1c132d")]
+        self.layouts = [Layout(tr("name.layout", n=1), Layout.STANDARD_FORMAT, "#1c132d")]
         self.aktives_layout = 0
         self.ansicht.set("modell")
         self.auswahl = []
@@ -6764,6 +7035,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             if typ == "vpunkt":     return Verbindungspunkt(**d)
             if typ == "leitung":    return Leitung(**d)
             if typ == "querverweis": return Querverweis(**d)
+            if typ == "drahtnummer": return Drahtnummer(**d)
             if typ == "verbindung": return Verbindung(**d)
             if typ == "maske":      return ElektroMaske(**d)
             if typ == "klemme":     return Klemme(**d)
@@ -6797,6 +7069,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         """Builds an ezdxf document from the current drawing."""
         wand_verknuepfen(self.elemente)
         doc = ezdxf.new(dxfversion="R2010")
+        # dashed, dash-dot, dotted ... wires and lines
+        self._dxf_lt_namen = DLT.definieren(doc)
         for name, l in self.layers.items():
             if name not in doc.layers:
                 doc.layers.add(name, color=self._hex_zu_aci(l.farbe))
@@ -6871,6 +7145,9 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
 
     def _element_zu_dxf(self, msp, el):
         attribs = {"layer": el.layer}
+        if not isinstance(el, (Text, ZUSAMMENGESETZT)):
+            attribs.update(DLT.attribute(getattr(el, "linientyp", None),
+                                         getattr(self, "_dxf_lt_namen", set())))
         try:
             if isinstance(el, Linie):
                 msp.add_line((el.x1, el.y1), (el.x2, el.y2), dxfattribs=attribs)
@@ -8536,12 +8813,28 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self._eig_palette = EigenschaftenPalette(self.root, self)
         return "break"
 
+    def _mit_ganzem_draht(self, ziele):
+        """Selected wire pieces -> all pieces of their wires on this sheet (a
+        conductor gets one line type up to the next terminal or device pin)."""
+        leitungen = [e for e in ziele if isinstance(e, Leitung)]
+        if not leitungen or self._ist_layout():
+            return list(ziele)
+        try:
+            alle = DN.gleicher_draht(self.elemente, leitungen)
+        except Exception as ex:                  # never block a style change
+            print(f"[KatieCAD] Draht: {ex}")
+            return list(ziele)
+        ids = {id(e) for e in ziele}
+        return list(ziele) + [l for l in alle if id(l) not in ids]
+
     def eigenschaft_anwenden(self, feld, wert):
         from katiecad.model.eigenschaften import anwenden
         if not self.auswahl:
             return
         self._snapshot()
-        n = anwenden(self.auswahl, feld, wert)
+        ziele = (self._mit_ganzem_draht(self.auswahl)
+                 if feld in ("linientyp", "staerke", "farbe") else self.auswahl)
+        n = anwenden(ziele, feld, wert)
         self.redraw()
         pal = getattr(self, "_eig_palette", None)
         if pal is not None:
@@ -8556,13 +8849,17 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         if not ziele:
             return
         self._snapshot()
+        ziele = self._mit_ganzem_draht(ziele)
         st = self._staerke_neu()
         for el in ziele:
-            el.staerke = st
+            # wires keep their own width while the toolbar says "by layer"
+            if not (isinstance(el, Leitung) and st is None):
+                el.staerke = st
             el.linientyp = self.linientyp.get()
         self.redraw()
         st_txt = tr("tb.von_layer") if st is None else f"{st} mm"
-        self.status.set((tr("txt.0041", p0=st_txt, p1=self.linientyp.get(), p2=len(ziele))))
+        self.status.set((tr("txt.0041", p0=st_txt, p1=linientyp_text(self.linientyp.get()),
+                            p2=len(ziele))))
 
     def _op_start(self, typ):
         kind, vp = self._ctx()
@@ -9147,14 +9444,14 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         elif cmd in ("ofang", "ortho"):
             var = self.osnap if cmd == "ofang" else self.ortho
             a = arg.upper()
-            if a in ("EIN", "ON", "AN"):
+            if a in ("EIN", "ON", "AN", "SI", "SÍ"):
                 var.set(True)
-            elif a in ("AUS", "OFF"):
+            elif a in ("AUS", "OFF", "NO"):
                 var.set(False)
             else:
                 var.set(not var.get())
-            name = ((tr("txt.0276") if cmd == "ofang" else "Ortho"))
-            self.status.set(f"{name}: {'EIN' if var.get() else 'AUS'}")
+            name = tr("txt.0276") if cmd == "ofang" else tr("sb.ortho")
+            self.status.set(f"{name}: {tr('status.an' if var.get() else 'status.aus')}")
         elif cmd in ("move", "copy", "copybase", "array", "rotate", "stretch",
                      "scale", "mirror"):
             self._op_start(cmd)
@@ -9176,6 +9473,16 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self.messen_start()
         elif cmd == "nummerieren":
             self.geraete_nummerieren()
+        elif cmd == "umbenennen_zaehler":
+            self.geraete_umbenennen()
+        elif cmd == "klemmen_nummern":
+            self.klemmen_nummerieren()
+        elif cmd == "klemmenleiste":
+            self.klemmenleiste_bearbeiten()
+        elif cmd == "versatz_verschieben":
+            self.versatz_verschieben()
+        elif cmd == "drahtnummern":
+            self.drahtnummern_vergeben()
         elif cmd == "schnellauswahl":
             self.schnellauswahl()
         elif cmd == "versatz":
@@ -9245,9 +9552,9 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
 
         def setze(text):
             t = text.strip().upper()
-            if t in ("EIN", "ON", "AN"):
+            if t in ("EIN", "ON", "AN", "SI", "SÍ"):
                 (self.raster_sichtbar if cmd == "raster" else self.grid_snap).set(True)
-            elif t in ("AUS", "OFF"):
+            elif t in ("AUS", "OFF", "NO"):
                 (self.raster_sichtbar if cmd == "raster" else self.grid_snap).set(False)
             elif t:
                 wert = self._parse_einzelwert(text, self._einh_faktor())
@@ -9259,7 +9566,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self._zeichne_raster()
             self.redraw()
             an = (self.raster_sichtbar if cmd == "raster" else self.grid_snap).get()
-            self.status.set(f"{name}: {var.get():g} mm, {'EIN' if an else 'AUS'}")
+            self.status.set(f"{name}: {var.get():g} mm, {tr('status.an' if an else 'status.aus')}")
 
         if arg:
             try:
@@ -9672,7 +9979,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             "fang_mm": self._zahl(self.fang_mm, 5.0),
             "layers": layers,
             "elemente": [],
-            "layouts": [Layout("Layout1", fmt, bg_l).to_dict()],
+            "layouts": [Layout(tr("name.layout", n=1), fmt, bg_l).to_dict()],
             "aktives_layout": 0,
             "ansicht": "modell",
             "sprache": SPRACHE["aktuell"],
@@ -9794,7 +10101,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         name, basis = dlg.result
         try:
             p = Projekt.erstellen(name, basis)
-            b = p.blatt_hinzufuegen("Blatt 1")
+            b = p.blatt_hinzufuegen(p.neuer_blattname(tr("name.blatt")))
             self._json_atomar_schreiben(
                 p.blatt_pfad(b),
                 self._leere_zeichnung_daten(einstellungen_uebernehmen=False))
@@ -9845,7 +10152,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             return False
         try:
             if not p.blaetter:
-                b = p.blatt_hinzufuegen("Blatt 1")
+                b = p.blatt_hinzufuegen(p.neuer_blattname(tr("name.blatt")))
                 self._json_atomar_schreiben(
                     p.blatt_pfad(b),
                     self._leere_zeichnung_daten(einstellungen_uebernehmen=False))
@@ -10168,7 +10475,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self.status.set(tr("msg.projekt.kein_projekt"))
             return
         name = _LayoutNameDialog(self.root, tr("msg.blatt.neu_titel"),
-                                 p.neuer_blattname(),
+                                 p.neuer_blattname(tr("name.blatt")),
                                  label=tr("dlg.blatt.name")).result
         if name is None:
             return
@@ -10197,7 +10504,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self.status.set(tr("msg.projekt.kein_projekt"))
             return
         name = _LayoutNameDialog(self.root, tr("msg.blatt.duplizieren_titel"),
-                                 p.kopie_name(p.blaetter[p.aktiv].name),
+                                 p.kopie_name(p.blaetter[p.aktiv].name, tr("name.kopie")),
                                  label=tr("dlg.blatt.name")).result
         if name is None:
             return
@@ -10651,11 +10958,72 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             g["blatt"] = nr
         geraete_referenzen(eigene, nr, andere)
 
-    def _einrasten(self, neue):
-        """Pins/junctions/terminals/devices placed on top interrupt the
-        wires they lie on."""
+    def versatz_verschieben(self):
+        """Edit > Move by offset...: moves (or copies n times) the selection by an
+        exact ΔX, ΔY, ΔZ; ΔZ applies to 3D objects only. No pin magnet, so the typed
+        distance is kept exactly. One undo step."""
+        ziele = list(self.auswahl)
+        if not ziele:
+            self.status.set(tr("msg.versatz.keine_auswahl"))
+            return
+        fak = self._einh_faktor()
+        mit_z = any(core.kann_z(e) for e in ziele)
+        letzt = dict(getattr(self, "_versatz_letzt", None) or {})
+        vorgabe = {k: letzt.get(k, 0.0) / fak for k in ("dx", "dy", "dz")}
+        vorgabe["kopien"] = letzt.get("kopien", 0)
+        dlg = VersatzDialog(self.root, self.einheit.get(), vorgabe, mit_z, len(ziele))
+        if dlg.result is None:
+            return
+        r = dlg.result
+        dx, dy, dz = r["dx"] * fak, r["dy"] * fak, r["dz"] * fak
+        self._versatz_letzt = {"dx": dx, "dy": dy, "dz": dz, "kopien": r["kopien"]}
+        if not (dx or dy or dz):
+            self.status.set(tr("msg.versatz.null"))
+            return
+        self._snapshot()
+        ohne_z = 0
+        if r["kopien"]:
+            liste = self._ziel_liste()
+            neu = []
+            for k in range(1, r["kopien"] + 1):
+                for el in ziele:
+                    c = self._dict_zu_element(el.to_dict())
+                    if c is None:
+                        c = deepcopy(el)
+                    ohne_z += core.versetzen([c], dx * k, dy * k, dz * k)
+                    liste.append(c)
+                    neu.append(c)
+            self.auswahl = neu[-len(ziele):]
+            self._einrasten(neu, magnet=False)
+            msg = tr("msg.versatz.kopiert", n=len(neu))
+        else:
+            ohne_z = core.versetzen(ziele, dx, dy, dz)
+            self._einrasten(ziele, magnet=False)
+            msg = tr("msg.versatz.verschoben", n=len(ziele))
+        if ohne_z:
+            msg += " " + tr("msg.versatz.ohne_z", n=ohne_z)
+        self.redraw()
+        if self._ansicht3d is not None:
+            self._ansicht3d.zeichne()
+        self.status.set(msg)
+
+    def _einst_speichern(self, schluessel, wert):
+        """Stores one setting in the configuration file."""
+        cfg = lade_konfiguration()
+        cfg[schluessel] = wert
+        speichere_konfiguration(cfg)
+
+    def _einrasten(self, neue, magnet=True):
+        """Pin magnet (devices beside another pin snap onto its line), then
+        pins/junctions/terminals/devices placed on top interrupt the wires
+        they lie on. magnet=False: exact positions (move by offset)."""
         if self._ist_layout() or not neue:
             return 0
+        if (magnet and getattr(self, "pin_magnet_var", None) is not None
+                and self.pin_magnet_var.get()):
+            dx, dy = pins_ausrichten(self._ziel_liste(), list(neue))
+            if dx or dy:
+                self.status.set(tr("msg.pin_magnet", dx=dx, dy=dy))
         zoom = self.view["zoom"] if self.view["zoom"] else 1.0
         tol = min(1.0, max(0.2, 3.0 / zoom))
         n = leitungen_einrasten(self._ziel_liste(), list(neue), tol)
@@ -10694,15 +11062,44 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         return px, py
 
     # Junction
-    def _verbindung_starten(self):
-        vor = self._vb_vorgabe or {"arme": [0, 90, 180], "punkt": True, "ausrichtung": 0}
-        dlg = VerbindungDialog(self.root, vor)
+    def _verbindungswerkzeug(self, form):
+        self.aktives_werkzeug.set("verbindung")
+        self._werkzeug_gewechselt(form)
+
+    def _verbindung_starten(self, form=None):
+        dlg = VerbindungsformDialog(self.root, form)
+        if dlg.erweitert:
+            dlg = VerbindungDialog(self.root, self._vb_vorgabe)
         if dlg.result is None:
             self.aktives_werkzeug.set("auswahl")
             self._werkzeug_gewechselt()
             return
         self._vb_vorgabe = dlg.result
-        self.status.set(tr("msg.verb.platzieren", art=len(dlg.result["arme"])))
+        anzahl = len(dlg.result["arme"])
+        if anzahl == 3:
+            self.status.set(tr("msg.verb.abzweig_platzieren"))
+        else:
+            self.status.set(tr("msg.verb.platzieren", art=anzahl))
+
+    def _verbindung_eingabepunkt(self, event):
+        """A T snaps across the wire while keeping the along-wire cursor snap."""
+        punkt = self._eingabepunkt(event)
+        arme = (self._vb_vorgabe or {}).get("arme", ())
+        if len(arme) != 3:
+            return punkt
+        waagerecht = 0 in arme and 180 in arme
+        leitungen = [el for el in self._ziel_liste()
+                     if isinstance(el, Leitung) and self._el_sichtbar(el)
+                     and (el.y1 == el.y2 if waagerecht else el.x1 == el.x2)]
+        x, y = self._px_zu_ctx(event.x, event.y)
+        treffer = naechster_leitungspunkt(leitungen, x, y, 6.0 / self._ctx_skala())
+        if treffer is None:
+            return punkt
+        leitung, x, y = treffer
+        gerastert = (punkt[0], y) if waagerecht else (x, punkt[1])
+        if naechster_leitungspunkt((leitung,), *gerastert, 0.001):
+            return gerastert
+        return x, y
 
     def _neue_verbindung(self, x, y):
         v = self._vb_vorgabe
@@ -10875,6 +11272,23 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         el.raster = dlg.result["raster"]
         self.redraw()
 
+    def _drahtnummer_bearbeiten(self, el):
+        """Wire number: number (a changed number becomes manual), core colour and
+        cross-section (shown in the terminal diagram)."""
+        dlg = FestMaskeDialog(
+            self.root, tr("dlg.drahtnr.titel"), [], {},
+            zusatz=[("nr", tr("dlg.draht.nummer"), el.inhalt),
+                    ("farbe", tr("dlg.draht.farbe"), el.aderfarbe),
+                    ("qs", tr("dlg.draht.querschnitt"), el.querschnitt)])
+        if dlg.result is None:
+            return
+        z = dlg.result.get("zusatz", {})
+        self._snapshot()
+        el.inhalt = z.get("nr", el.inhalt) or el.inhalt
+        el.aderfarbe = z.get("farbe", "")
+        el.querschnitt = z.get("qs", "")
+        self.redraw()
+
     def _fest_bearbeiten(self, el):
         ist_maske = isinstance(el, ElektroMaske)
         dlg = FestMaskeDialog(
@@ -10886,7 +11300,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             else tr("dlg.klemme.hinweis"),
             ausgeblendet=el.ausgeblendet, einpolig=el.einpolig,
             pole=el.pole if ist_maske else None,
-            darstellung=None if ist_maske else el.darstellung)
+            darstellung=None if ist_maske else el.darstellung,
+            trennplatte=None if ist_maske else el.trennplatte)
         if dlg.result is None:
             return
         self._snapshot()
@@ -10897,6 +11312,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             el.einpolig = dlg.result["einpolig"]
         if not ist_maske and dlg.result.get("darstellung"):
             el.darstellung = dlg.result["darstellung"]
+        if not ist_maske and dlg.result.get("trennplatte") is not None:
+            el.trennplatte = dlg.result["trennplatte"]
         if ist_maske and dlg.result.get("pole") is not None:
             el.pole = dlg.result["pole"]
         if ist_maske and dlg.result["rolle"]:
@@ -10910,7 +11327,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
 
     def _geister_vorschau(self, event, wz):
         """Preview (ghost image) for junction / mask / terminal."""
-        pt = self._eingabepunkt(event)
+        pt = self._verbindung_eingabepunkt(event) if wz == "verbindung" else self._eingabepunkt(event)
         if wz == "verbindung":
             if not self._vb_vorgabe:
                 return False
@@ -11458,6 +11875,269 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self.redraw()
         self.status.set(tr("txt.0052", p0=len(aend)))
 
+    def geraete_umbenennen(self):
+        """Project > Rename devices with counter: the selected devices (or those of the
+        sheet / project) get a new identifier from a format (10K1, 10K2 ...); auxiliary
+        contacts, single-pole copies and 3D models of the same device follow on every
+        sheet (see electrical.umbenennen)."""
+        from katiecad.electrical import umbenennen as UMB
+        if self._ist_layout():
+            self.status.set(tr("txt.0126"))
+            return
+        p = self.projekt
+        if p is not None and not self._blatt_sichern():
+            return
+        aktiv = p.aktiv if p is not None else 0
+        daten = {}
+        blaetter = [(aktiv, self.elemente)]
+        for i, pfad, d in self._andere_blaetter_daten():
+            daten[i] = (pfad, d)
+            blaetter.append((i, d.get("elemente", [])))
+        blaetter.sort(key=lambda b: b[0])
+
+        def sheet_nr(i):
+            return i + 1
+        sheet_name = (lambda i: p.blaetter[i].name) if p is not None else None
+        auswahl = [e for e in self.auswahl if NUM.geraete_felder(e) is not None]
+        bereiche = (["auswahl"] if auswahl else []) + ["blatt"] + (["projekt"] if daten else [])
+        quelle = p.doku if p is not None else getattr(self, "_umb_einst", {})
+        vorgabe = dict(UMB.STANDARD, **quelle.get("umbenennen", {}))
+
+        def planen(einst, bereich):
+            ziel = {"auswahl": auswahl, "blatt": self.elemente}.get(bereich)
+            return UMB.planen(blaetter, ziel, einst, sheet_nr, sheet_name)
+
+        def vorschau(einst, bereich):
+            return [(a if isinstance(a, str) else str(a.get("IND", "")), n)
+                    for a, n in planen(einst, bereich)]
+
+        dlg = UmbenennenDialog(self.root, vorgabe, bereiche, vorschau)
+        if dlg.result is None:
+            return
+        r = dict(dlg.result)
+        bereich = r.pop("bereich")
+        if p is not None:
+            p.doku["umbenennen"] = r
+            p.speichern()
+        else:
+            self._umb_einst = {"umbenennen": r}
+        plan = planen(r, bereich)
+        if not any(not isinstance(a, str) or a != n for a, n in plan):
+            self.status.set(tr("msg.umb.nichts"))
+            return
+        self._snapshot()
+        geaendert = UMB.anwenden(plan, blaetter)
+        fehler = []
+        for i in geaendert:
+            if i == aktiv or i not in daten:
+                continue
+            try:
+                self._json_atomar_schreiben(daten[i][0], daten[i][1])
+            except OSError as ex:
+                fehler.append(str(ex))
+        if fehler:
+            messagebox.showerror(tr("dlg.umb.titel"), "\n".join(fehler), parent=self.root)
+        self._qv_cache.clear()
+        self._ge_cache.clear()
+        self.redraw()
+        self.status.set(tr("msg.umb.fertig", n=len(plan), t=sum(geaendert.values()),
+                           b=len(geaendert)))
+
+    def klemmen_nummerieren(self):
+        """Project > Renumber terminal strips: the terminals of the chosen strips get the
+        numbers 1, 2 ... over the whole project, by position or closing the gaps of the
+        present order (see electrical.klemmen_nummern)."""
+        from katiecad.electrical import klemmen_nummern as KN
+        if self._ist_layout():
+            self.status.set(tr("txt.0126"))
+            return
+        p = self.projekt
+        if p is not None and not self._blatt_sichern():
+            return
+        aktiv = p.aktiv if p is not None else 0
+        daten = {}
+        blaetter = [(aktiv, self.elemente)]
+        for i, pfad, d in self._andere_blaetter_daten():
+            daten[i] = (pfad, d)
+            blaetter.append((i, d.get("elemente", [])))
+        blaetter.sort(key=lambda b: b[0])
+        anzahl = KN.leisten(blaetter)
+        if not anzahl:
+            self.status.set(tr("msg.kln.keine_leisten"))
+            return
+        leisten = [(n, anzahl[n]) for n in sorted(anzahl, key=KN.natuerlich)]
+        gewaehlt = (sorted(set(KN.gewaehlte_leisten(self.elemente, self.auswahl)), key=KN.natuerlich)
+                    or [n for n, _z in leisten])
+        quelle = p.doku if p is not None else getattr(self, "_kln_einst", {})
+        vorgabe = dict(KN.STANDARD, **quelle.get("klemmen_nummern", {}))
+
+        def vorschau(einst, namen):
+            return [(lst, alt, neu) for lst, alt, neu, _w in KN.planen(blaetter, set(namen), einst)]
+
+        dlg = KlemmenNummernDialog(self.root, vorgabe, leisten, gewaehlt, vorschau)
+        if dlg.result is None:
+            return
+        r = dict(dlg.result)
+        namen = set(r.pop("leisten"))
+        if p is not None:
+            p.doku["klemmen_nummern"] = r
+            p.speichern()
+        else:
+            self._kln_einst = {"klemmen_nummern": r}
+        plan = KN.planen(blaetter, namen, r)
+        behalten = r.get("reihenfolge") == "bestehend"
+        betroffen = KN.blaetter_geaendert(KN.offen(plan, behalten), blaetter)
+        if not betroffen:
+            self.status.set(tr("msg.kln.nichts"))
+            return
+        self._snapshot()
+        n = KN.anwenden(plan, behalten)
+        fehler = []
+        for i in betroffen:
+            if i == aktiv or i not in daten:
+                continue
+            try:
+                self._json_atomar_schreiben(daten[i][0], daten[i][1])
+            except OSError as ex:
+                fehler.append(str(ex))
+        if fehler:
+            messagebox.showerror(tr("dlg.kln.titel"), "\n".join(fehler), parent=self.root)
+        self.redraw()
+        self.status.set(tr("msg.kln.fertig", n=n, l=len(namen), b=len(betroffen)))
+
+    def _klemmen_ziele(self):
+        """{(sheet, x, y): (top, bottom)} targets of every terminal from the terminal
+        diagram (for the terminal strip editor); {} when it cannot be computed."""
+        from katiecad.electrical import klemmenleiste as KL
+        from katiecad.reports import daten as RD
+        try:
+            p = self.projekt
+            if p is not None:
+                infos, indizes = self._zeichnungsblaetter_einlesen()
+                if infos is None:
+                    return {}
+                bl = [(i, b.elemente) for i, b in zip(indizes, infos)]
+            else:
+                leitungen_automatisch(self.elemente)
+                bl = [(0, self.elemente)]
+            return KL.ziele_index(RD.klemmenplan(SEI.netz_aufbauen(bl), bl, lambda i: i + 1))
+        except Exception:                       # the editor works without targets too
+            return {}
+
+    def klemmenleiste_bearbeiten(self):
+        """Project > Edit terminal strip: table of a strip in mounting order (number, type,
+        jumper, partition plate, order), written to the terminals of every sheet (see
+        electrical.klemmenleiste)."""
+        from katiecad.electrical import klemmenleiste as KL, klemmen_nummern as KN
+        if self._ist_layout():
+            self.status.set(tr("txt.0126"))
+            return
+        p = self.projekt
+        if p is not None and not self._blatt_sichern():
+            return
+        aktiv = p.aktiv if p is not None else 0
+        daten = {}
+        blaetter = [(aktiv, self.elemente)]
+        for i, pfad, d in self._andere_blaetter_daten():
+            daten[i] = (pfad, d)
+            blaetter.append((i, d.get("elemente", [])))
+        blaetter.sort(key=lambda b: b[0])
+        leisten = sorted(KN.leisten(blaetter), key=KN.natuerlich)
+        if not leisten:
+            self.status.set(tr("msg.kln.keine_leisten"))
+            return
+        gewaehlt = KN.gewaehlte_leisten(self.elemente, self.auswahl)
+        start = next((n for n in gewaehlt if n in leisten), leisten[0])
+        ziele = self._klemmen_ziele()
+        dlg = KlemmenleisteDialog(self.root, leisten, start,
+                                  lambda n: KL.zeilen(blaetter, n, ziele))
+        if not dlg.result:
+            return
+        self._snapshot()
+        n, betroffen = 0, set()
+        for rows in dlg.result.values():
+            n += KL.anwenden(rows)
+            betroffen |= KL.blaetter_von(rows, blaetter)
+        if not n:
+            self.status.set(tr("msg.kleiste.nichts"))
+            return
+        fehler = []
+        for i in betroffen:
+            if i == aktiv or i not in daten:
+                continue
+            try:
+                self._json_atomar_schreiben(daten[i][0], daten[i][1])
+            except OSError as ex:
+                fehler.append(str(ex))
+        if fehler:
+            messagebox.showerror(tr("dlg.kleiste.titel"), "\n".join(fehler), parent=self.root)
+        self.redraw()
+        self.status.set(tr("msg.kleiste.fertig", n=n, l=len(dlg.result), b=len(betroffen)))
+
+    def drahtnummern_vergeben(self):
+        """Wire numbering (see electrical.drahtnummern): one number per wire,
+        manual numbers are kept, PLC channels give their address."""
+        if self._ist_layout():
+            self.status.set(tr("txt.0126"))
+            return
+        p = self.projekt
+        mehrere = p is not None and len(p.zeichnungsblaetter()) > 1
+        vorgabe = DN.einstellungen(p.doku if p is not None else self._draht_einst)
+        dlg = DrahtnummernDialog(self.root, vorgabe, mehrere)
+        if dlg.result is None:
+            return
+        r = dlg.result
+        einst = {k: r.get(k, vorgabe[k]) for k in DN.STANDARD}
+        self._einpolig_sync()
+        if p is not None and not self._blatt_sichern():
+            return
+        if p is not None and r["projekt"] and mehrere:
+            infos, indizes = self._zeichnungsblaetter_einlesen()
+            if infos is None:
+                return
+            blaetter = [(i, b.elemente) for i, b in zip(indizes, infos)]
+        else:
+            leitungen_automatisch(self.elemente)
+            blaetter = [(p.aktiv if p is not None else 0, self.elemente)]
+        netz = SEI.netz_aufbauen(blaetter)
+        try:
+            plan = DN.planen(
+                blaetter, netz,
+                sheet_nr=lambda i: i + 1,
+                sheet_name=(lambda i: p.blaetter[i].name) if p is not None else None,
+                einstellung=einst, neu_nummerieren=r["neu"])
+        except DN.DrahtformatFehler:
+            messagebox.showerror(tr("dlg.draht.titel"), tr("dlg.draht.format_fehler"), parent=self.root)
+            return
+        if p is not None:
+            p.doku["drahtnummern"] = einst
+        else:
+            self._draht_einst = {"drahtnummern": einst}
+        if plan.anzahl == 0:
+            self.status.set(tr("msg.draht.nichts", n=len(plan.draehte)))
+            return
+        self._snapshot()
+        aktiv = p.aktiv if p is not None else 0
+        andere = {i: (pfad, d) for i, pfad, d in self._andere_blaetter_daten()} if p else {}
+        fehler = []
+        for i, elemente in blaetter:
+            if not DN.anwenden(plan, i, elemente) or i == aktiv or i not in andere:
+                continue
+            pfad, d = andere[i]
+            d["elemente"] = ([e for e in d.get("elemente", [])
+                              if not (isinstance(e, dict) and e.get("typ") == "drahtnummer")]
+                             + [e.to_dict() for e in elemente if isinstance(e, Drahtnummer)])
+            try:
+                self._json_atomar_schreiben(pfad, d)
+            except OSError as ex:
+                fehler.append(str(ex))
+        if p is not None:
+            p.speichern()
+        if fehler:
+            messagebox.showerror(tr("dlg.draht.titel"), "\n".join(fehler), parent=self.root)
+        self.redraw()
+        self.status.set(tr("msg.draht.fertig", n=len(plan.draehte)))
+
     def bauteilkatalog(self):
         """Parts catalogue (manufacturer / order number per TYP) of the project."""
         p = self.projekt
@@ -11478,7 +12158,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         dlg = BauteilkatalogDialog(self.root, p.daten.get("bauteile", []), vorschlaege)
         if dlg.result is None:
             return
-        p.daten["bauteile"] = dlg.result
+        from katiecad.model.geraete3d import katalog_zusammenfuehren
+        p.daten["bauteile"] = katalog_zusammenfuehren(p.daten.get("bauteile", []), dlg.result)
         p.speichern()
         self.status.set(tr("txt.0053", p0=len(dlg.result)))
 
@@ -11504,8 +12185,10 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self.status.set(tr("msg.doku.keine_auswahl"))
             return
         p.daten = {**p.daten, **res["daten"]}      # keeps the revision table
-        p.doku = {"berichte": res["berichte"], "vorlage": res["vorlage"],
+        # keeps other settings (e.g. wire numbering) stored in p.doku
+        p.doku = {**p.doku, "berichte": res["berichte"], "vorlage": res["vorlage"],
                   "klemmen_geraete": res["klemmen_geraete"],
+                  "klemmen_seiten": res.get("klemmen_seiten", "auto"),
                   "einpolig_auswerten": bool(res.get("einpolig_auswerten")),
                   "format": res.get("format", "a4"),
                   "schrift": res.get("schrift", "Arial")}
@@ -11526,7 +12209,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                 klemmen_in_geraeteliste=res["klemmen_geraete"],
                 format=SEI.format_name(res.get("format")),
                 katalog=p.daten.get("bauteile", []),
-                schrift=res.get("schrift", "Arial"))
+                schrift=res.get("schrift", "Arial"),
+                klemmen_seiten=res.get("klemmen_seiten", "auto"))
             basis = self._leere_zeichnung_daten(einstellungen_uebernehmen=True)
             neu_aktiv = ANW.ins_projekt(p, vorne, hinten, basis,
                                         self._json_atomar_schreiben,
@@ -11566,7 +12250,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                 SEI.spalten_ordner(programm, p.ordner),
                 bool(p.doku.get("klemmen_geraete", True)),
                 {k: b.einbauort for k, b in enumerate(infos)},
-                p.daten.get("bauteile", []), p.daten)
+                p.daten.get("bauteile", []), p.daten,
+                klemmen_seiten=p.doku.get("klemmen_seiten", "auto"))
             namen = {t: tr("rep." + t) for t in tabellen}
             pfade = ANW.csv_exportieren(ziel, tabellen, namen)
         except OSError as e:
@@ -11602,6 +12287,77 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self.redraw()
         self.status.set(tr("msg.schriften_gesetzt", n=len(SCHRIFTEN.aktive_namen())))
 
+    def etiketten_mprint(self):
+        """Markers for the label printer (Weidmüller M-Print PRO): wires (one per
+        end), terminals in mounting order and devices as Excel (one sheet per list)
+        or CSV; texts longer than the marker are reported."""
+        from katiecad.reports import mprint as MP
+        p = self.projekt
+        if p is None:
+            self.status.set(tr("msg.projekt.kein_projekt"))
+            return
+        if not self._blatt_sichern():
+            return
+        infos, indizes = self._zeichnungsblaetter_einlesen()
+        if infos is None:
+            return
+        blaetter = [(k, b.elemente) for k, b in enumerate(infos)]
+        einbauorte = {k: b.einbauort for k, b in enumerate(infos)}
+
+        def nummer(k):
+            return indizes[k] + 1
+        try:
+            netz = SEI.netz_aufbauen(blaetter)
+            einst = MP.einstellungen(p.doku)
+            alle = dict(einst, **{a: dict(einst[a], aktiv=True) for a in MP.ARTEN})
+            anzahl = {a: len(z) for a, z in
+                      MP.listen(netz, blaetter, nummer, einbauorte, alle).items()}
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror(tr("dlg.mp.titel"), tr("msg.doku.fehler",
+                                 fehler=f"{type(e).__name__}: {e}"), parent=self.root)
+            return
+        dlg = MPrintDialog(self.root, einst, anzahl)
+        if dlg.result is None:
+            return
+        einst = MP.einstellungen({"mprint": dlg.result})
+        p.doku = {**p.doku, "mprint": dlg.result}
+        p.speichern()
+        listen = {a: z for a, z in MP.listen(netz, blaetter, nummer, einbauorte, einst).items()
+                  if z}
+        if not listen:
+            self.status.set(tr("msg.mp.leer"))
+            return
+        namen = {a: tr("mp." + a) for a in MP.ARTEN}
+        if einst["csv"]:
+            ziel = filedialog.askdirectory(parent=self.root, initialdir=p.ordner,
+                                           title=tr("dlg.mp.titel"))
+        else:
+            ziel = filedialog.asksaveasfilename(
+                parent=self.root, initialdir=p.ordner, initialfile=p.name + "_M-Print.xlsx",
+                defaultextension=".xlsx", filetypes=[("Excel", "*.xlsx")],
+                title=tr("dlg.mp.titel"))
+        if not ziel:
+            return
+        try:
+            geschrieben = MP.exportieren(ziel, listen, namen, einst["csv"], einst["kopf"])
+        except OSError as e:
+            messagebox.showerror(tr("dlg.mp.titel"), tr("msg.doku.fehler", fehler=e),
+                                 parent=self.root)
+            return
+        n = sum(len(z) for z in listen.values())
+        self.status.set(tr("msg.mp.fertig", n=n, teile=len(geschrieben), ziel=ziel))
+        lang = MP.zu_lang(listen, einst)
+        if lang:
+            zeilen = [tr("msg.mp.zeile", liste=namen[a], text=t, n=l, max=m)
+                      for a, t, l, m in lang[:15]]
+            if len(lang) > 15:
+                zeilen.append("...")
+            messagebox.showwarning(tr("dlg.mp.titel"),
+                                   tr("msg.mp.zu_lang", n=len(lang)) + "\n\n" + "\n".join(zeilen),
+                                   parent=self.root)
+
     def dokumentation_excel(self):
         """Lists (device list, terminal diagram, cable plan, parts list ...) as ONE Excel
         workbook (.xlsx), one sheet per chosen list."""
@@ -11622,7 +12378,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                 SEI.spalten_ordner(programm, p.ordner),
                 bool(p.doku.get("klemmen_geraete", True)),
                 {k: b.einbauort for k, b in enumerate(infos)},
-                p.daten.get("bauteile", []), p.daten)
+                p.daten.get("bauteile", []), p.daten,
+                klemmen_seiten=p.doku.get("klemmen_seiten", "auto"))
         except Exception as e:
             import traceback
             traceback.print_exc()

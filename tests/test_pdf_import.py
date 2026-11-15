@@ -148,6 +148,11 @@ def test_layer_export():
 
 
 if __name__ == "__main__":
+    try:
+        import pypdf  # noqa: F401
+    except ImportError:          # like OCP for STEP: the importer needs it, the test skips
+        print("OK (pypdf nicht installiert: PDF-Import übersprungen - pip install -r requirements.txt)")
+        sys.exit(0)
     for n, f in list(globals().items()):
         if n.startswith("test_"):
             f()

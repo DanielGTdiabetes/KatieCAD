@@ -38,6 +38,19 @@ LEISTEN = ("werkzeug", "bau", "elektro", "3d")            # order inside a docki
 LEISTEN_ATTR = {"werkzeug": "tb1", "bau": "tbB", "elektro": "tbE", "3d": "tbD"}
 CONFIG_KEY = {"werkzeug": "toolbar_pos", "bau": "toolbar_pos_bau", "elektro": "toolbar_pos_elektro",
               "3d": "toolbar_pos_3d"}
+KNOPF_CONFIG_KEY = "toolbar_knoepfe"
+
+
+def knopf_optionen(standard, daten):
+    """Return a complete order and hidden buttons, ignoring obsolete preferences."""
+    daten = daten if isinstance(daten, dict) else {}
+    reihe = daten.get("reihenfolge")
+    aus = daten.get("ausgeblendet")
+    reihe = reihe if isinstance(reihe, list) else []
+    aus = aus if isinstance(aus, list) else []
+    reihe = list(dict.fromkeys(k for k in reihe if k in standard))
+    reihe.extend(k for k in standard if k not in reihe)
+    return reihe, {k for k in aus if k in standard}
 
 
 class ToolbarDockMixin:
@@ -125,6 +138,38 @@ class ToolbarDockMixin:
     def _leiste(self, name):
         return getattr(self, LEISTEN_ATTR[name], None)
 
+    def toolbar_eintraege(self, name):
+        return [ch._toolbar_eintrag for ch in self._leiste(name).winfo_children()
+                if hasattr(ch, "_toolbar_eintrag")]
+
+    def toolbar_knopf_optionen(self, name):
+        if getattr(self, "_tb_knopf_konfig", None) is None:
+            daten = lade_konfiguration().get(KNOPF_CONFIG_KEY)
+            self._tb_knopf_konfig = daten if isinstance(daten, dict) else {}
+        standard = [key for key, _label in self.toolbar_eintraege(name)]
+        return knopf_optionen(standard, self._tb_knopf_konfig.get(name))
+
+    def toolbar_knopf_optionen_setzen(self, name, reihe, ausgeblendet):
+        cfg = lade_konfiguration()
+        aktuell = cfg.get(KNOPF_CONFIG_KEY)
+        self._tb_knopf_konfig = dict(aktuell) if isinstance(aktuell, dict) else {}
+        self._tb_knopf_konfig[name] = {"reihenfolge": list(reihe),
+                                     "ausgeblendet": sorted(ausgeblendet)}
+        cfg[KNOPF_CONFIG_KEY] = self._tb_knopf_konfig
+        speichere_konfiguration(cfg)
+        self._toolbar_anordnen()
+
+    def _leiste_kinder(self, name):
+        reihe, ausgeblendet = self.toolbar_knopf_optionen(name)
+        feste, knoepfe = [], {}
+        for ch in self._leiste(name).winfo_children():
+            eintrag = getattr(ch, "_toolbar_eintrag", None)
+            if eintrag is None:
+                feste.append(ch)
+            else:
+                knoepfe[eintrag[0]] = ch
+        return feste + [knoepfe[key] for key in reihe if key not in ausgeblendet]
+
     def _zone(self, pos):
         """Frame that holds all bars docked at `pos` (created on demand)."""
         if self._tb_zonen is None:
@@ -137,7 +182,7 @@ class ToolbarDockMixin:
 
     # ---- layout -------------------------------------------------------
     def _toolbar_anordnen(self):
-        """(Re)places the three symbol toolbars according to their stored positions."""
+        """(Re)places the symbol toolbars according to their saved preferences."""
         if self._tb_info is None:
             self._tb_info = {}
         koord = getattr(self, "_koord_bar", None)
@@ -176,7 +221,7 @@ class ToolbarDockMixin:
                 if pos == "rechts":
                     self._leiste_gitter(name, len(namen))
                 else:
-                    for ch in tb.winfo_children():
+                    for ch in self._leiste_kinder(name):
                         info = self._tb_info.get(ch)
                         if info:
                             info = {k: v for k, v in info.items() if k != "in"}
@@ -228,8 +273,7 @@ class ToolbarDockMixin:
                 tb.tkraise()                  # must lie above its zone, else it is hidden
 
     def _leiste_gitter(self, name, anzahl_rechts):
-        tb = self._leiste(name)
-        sichtbar = [c for c in tb.winfo_children() if not isinstance(c, ttk.Separator)]
+        sichtbar = [c for c in self._leiste_kinder(name) if not isinstance(c, ttk.Separator)]
         hoehe = (self.root.winfo_height() - 230) // max(1, anzahl_rechts)
         n = spalten_zeilen(len(sichtbar), hoehe)
         for i, ch in enumerate(sichtbar):

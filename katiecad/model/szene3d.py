@@ -603,10 +603,60 @@ def _el_fang(el, out):
         _zug_fang([(x, y, 0.0) for x, y in zug], closed, out)
 
 
+HUT_FANG = 25.0      # mm: a device's DIN rail point this close to a rail axis snaps onto it
+
+
+def hutschienen(elemente):
+    """[(bbox3, horizontal?)] of the DIN rail bodies (drawn with the rail tool)."""
+    out = []
+    for el in elemente:
+        if isinstance(el, Koerper3D) and (el.kanal or {}).get("schiene"):
+            b = el.bbox3()
+            if b:
+                out.append((b, (b[3] - b[0]) >= (b[5] - b[2])))
+    return out
+
+
+def auf_hutschiene(elemente, p, hut, fang=HUT_FANG):
+    """Position of a device whose DIN rail point lies at p + hut, moved onto the nearest rail:
+    the rail point on the rail axis, the back on the front of the rail (y = rail front).
+    -> (position, [(point, kind)]) or None if no rail is near."""
+    hx, hy, hz = p[0] + hut[0], p[1] + hut[1], p[2] + hut[2]
+    best = None
+    for b, waagrecht in hutschienen(elemente):
+        if waagrecht:
+            achse, d = (b[2] + b[5]) / 2.0, None
+            if b[0] - 1e-6 <= hx <= b[3] + 1e-6:
+                d = abs(hz - achse)
+        else:
+            achse, d = (b[0] + b[3]) / 2.0, None
+            if b[2] - 1e-6 <= hz <= b[5] + 1e-6:
+                d = abs(hx - achse)
+        if d is not None and d <= fang and (best is None or d < best[0]):
+            best = (d, b, waagrecht, achse)
+    if best is None:
+        return None
+    _d, b, waagrecht, achse = best
+    nx, nz = (hx, achse) if waagrecht else (achse, hz)
+    ny = b[1]                                       # front face of the rail
+    pos = (nx - hut[0], ny - hut[1], nz - hut[2])
+    return pos, [((nx, ny, nz), "zentrum")]
+
+
 def fang_kandidaten(elemente):
     """Snap candidates [(3D point, kind)] with kind end / mitte / zentrum."""
     out = []
+    modelle = set()
+    for el in elemente:                               # imported device models: their own points
+        for k in (el.koerper() if ist_3d(el) and hasattr(el, "koerper") else ()):
+            fang = (getattr(k, "netzdaten", None) or {}).get("fang") if k.art == "netz" else None
+            if fang:
+                modelle.add(id(el))
+                out.extend(((q[0], q[1], q[2]), "end" if q[3] == "ecke" else "zentrum")
+                           for q in fang)
     for _el, nz in koerper_netze(elemente):
+        if id(_el) in modelle:
+            continue
         if len(nz.punkte) > 24:                       # round body: only the cap centres
             zs = [p[2] for p in nz.punkte]
             z0, z1 = min(zs), max(zs)
@@ -653,10 +703,11 @@ def fang_punkt(elemente, kamera, cx, cy, mx, my, tol=12.0):
     return r[0] if r else None
 
 
-def host_finden(elemente, ebene, punkt=None):
+def host_finden(elemente, ebene, punkt=None, nur_innen=False):
     """Body whose face lies in the work plane `ebene`. With `punkt` (local plane point,
     e.g. the sketch centre) the body whose face contains that point wins, so two bodies
-    with faces in the same plane are told apart; otherwise the first match."""
+    with faces in the same plane are told apart; otherwise the first match
+    (nur_innen=True: None instead - the point must lie on a face)."""
     u, v, w = G.ebene_basis(ebene)
     erste = None
     for el in elemente:
@@ -686,7 +737,7 @@ def host_finden(elemente, ebene, punkt=None):
                 if G.punkt_in_polygon(G.ebene_lokal(ebene, wp)[0], G.ebene_lokal(ebene, wp)[1],
                                       [(q[0], q[1]) for q in lok]):
                     return k
-    return erste
+    return None if (nur_innen and punkt is not None) else erste
 
 
 def skizze_in_ausschnitt(elemente, skizze, tiefe=None):

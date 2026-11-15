@@ -55,8 +55,10 @@ def _zelle(ref, wert, zahl, stil=0):
     return '<c r="%s"%s t="inlineStr"><is><t xml:space="preserve">%s</t></is></c>' % (ref, s, t)
 
 
-def _blatt_xml(spalten, zeilen):
-    """spalten: [(title, key, right_aligned)], zeilen: [dict]"""
+def _blatt_xml(spalten, zeilen, kopf=True):
+    """spalten: [(title, key, right_aligned)], zeilen: [dict].
+    kopf=False: no header row (data from row 1, no freeze / filter), e.g. for
+    label printer imports where every row is one label."""
     n = len(spalten)
     daten = [[_text(z.get(key, "")) for _t, key, _r in spalten] for z in zeilen]
     breiten = []
@@ -66,25 +68,28 @@ def _blatt_xml(spalten, zeilen):
         breiten.append(min(max(m + 2, 8), 70))
     x = ['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
          '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">']
-    letzte = "%s%d" % (spaltenname(max(n, 1) - 1), len(daten) + 1)
+    erste = 2 if kopf else 1                      # first data row
+    letzte = "%s%d" % (spaltenname(max(n, 1) - 1), max(1, len(daten) + erste - 1))
     x.append('<dimension ref="A1:%s"/>' % letzte)
-    x.append('<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" '
-             'activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>')
+    if kopf:
+        x.append('<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" '
+                 'activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>')
     x.append('<sheetFormatPr defaultRowHeight="15"/>')
     if n:
         x.append("<cols>" + "".join(
             '<col min="%d" max="%d" width="%d" customWidth="1"/>' % (i + 1, i + 1, b)
             for i, b in enumerate(breiten)) + "</cols>")
     x.append("<sheetData>")
-    x.append('<row r="1">' + "".join(
-        _zelle("%s1" % spaltenname(i), t, False, 1) for i, (t, _k, _r) in enumerate(spalten))
-        + "</row>")
-    for r, d in enumerate(daten, start=2):
+    if kopf:
+        x.append('<row r="1">' + "".join(
+            _zelle("%s1" % spaltenname(i), t, False, 1) for i, (t, _k, _r) in enumerate(spalten))
+            + "</row>")
+    for r, d in enumerate(daten, start=erste):
         zellen = "".join(_zelle("%s%d" % (spaltenname(i), r), d[i], spalten[i][2],
                                 2 if "\n" in d[i] else 0) for i in range(n))
         x.append('<row r="%d">%s</row>' % (r, zellen))
     x.append("</sheetData>")
-    if n:
+    if n and kopf:
         x.append('<autoFilter ref="A1:%s"/>' % letzte)
     x.append('<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>')
     x.append('<pageSetup paperSize="9" orientation="landscape" fitToHeight="0"/>')
@@ -115,8 +120,9 @@ _STYLES = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
            '</styleSheet>')
 
 
-def xlsx_schreiben(pfad, blaetter, titel="KatieCAD"):
+def xlsx_schreiben(pfad, blaetter, titel="KatieCAD", ohne_kopf=False):
     """blaetter: [(sheet name, [(column title, key, right_aligned)], [row dicts])].
+    ohne_kopf: no header row in any sheet (one label per row from row 1).
     -> the sheet names actually used."""
     if not blaetter:
         raise ValueError("no sheets")
@@ -162,5 +168,6 @@ def xlsx_schreiben(pfad, blaetter, titel="KatieCAD"):
         z.writestr("xl/_rels/workbook.xml.rels", "".join(wbrels))
         z.writestr("xl/styles.xml", _STYLES)
         for i, (_n, spalten, zeilen) in enumerate(blaetter):
-            z.writestr("xl/worksheets/sheet%d.xml" % (i + 1), _blatt_xml(spalten, zeilen))
+            z.writestr("xl/worksheets/sheet%d.xml" % (i + 1),
+                       _blatt_xml(spalten, zeilen, kopf=not ohne_kopf))
     return namen

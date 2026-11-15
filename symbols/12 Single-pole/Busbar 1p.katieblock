@@ -1,0 +1,249 @@
+{
+  "format": "katiecad-block",
+  "version": 1,
+  "block": {
+    "name": "Busbar 1p",
+    "basispunkt": [
+      0.0,
+      0.0
+    ],
+    "elemente": [
+      {
+        "typ": "linie",
+        "layer": "0",
+        "farbe": "#c29bff",
+        "linientyp": "Volllinie (schmal)",
+        "eig_farbe": true,
+        "staerke": 1.0,
+        "x1": 0.0,
+        "y1": 0.0,
+        "x2": 60.0,
+        "y2": 0.0
+      },
+      {
+        "typ": "vpunkt",
+        "layer": "0",
+        "farbe": "#c29bff",
+        "linientyp": "Volllinie (schmal)",
+        "eig_farbe": true,
+        "staerke": 0.25,
+        "x": 0.0,
+        "y": 0.0,
+        "inhalt": "L1,L2,L3,N",
+        "hoehe": 2.0,
+        "winkel": 0.0,
+        "schriftart": "Arial",
+        "einfuegepunkt": "mitte_links",
+        "tag": "VP1",
+        "prompt": "Pin 1",
+        "wert": "L1,L2,L3,N",
+        "sichtbar": false,
+        "text_dx": 0.0,
+        "text_dy": 0.0,
+        "richtungen": [
+          90,
+          270
+        ],
+        "radius": 0.5
+      },
+      {
+        "typ": "vpunkt",
+        "layer": "0",
+        "farbe": "#c29bff",
+        "linientyp": "Volllinie (schmal)",
+        "eig_farbe": true,
+        "staerke": 0.25,
+        "x": 10.0,
+        "y": 0.0,
+        "inhalt": "L1,L2,L3,N",
+        "hoehe": 2.0,
+        "winkel": 0.0,
+        "schriftart": "Arial",
+        "einfuegepunkt": "mitte_links",
+        "tag": "VP2",
+        "prompt": "Pin 2",
+        "wert": "L1,L2,L3,N",
+        "sichtbar": false,
+        "text_dx": 0.0,
+        "text_dy": 0.0,
+        "richtungen": [
+          90,
+          270
+        ],
+        "radius": 0.5
+      },
+      {
+        "typ": "vpunkt",
+        "layer": "0",
+        "farbe": "#c29bff",
+        "linientyp": "Volllinie (schmal)",
+        "eig_farbe": true,
+        "staerke": 0.25,
+        "x": 20.0,
+        "y": 0.0,
+        "inhalt": "L1,L2,L3,N",
+        "hoehe": 2.0,
+        "winkel": 0.0,
+        "schriftart": "Arial",
+        "einfuegepunkt": "mitte_links",
+        "tag": "VP3",
+        "prompt": "Pin 3",
+        "wert": "L1,L2,L3,N",
+        "sichtbar": false,
+        "text_dx": 0.0,
+        "text_dy": 0.0,
+        "richtungen": [
+          90,
+          270
+        ],
+        "radius": 0.5
+      },
+      {
+        "typ": "vpunkt",
+        "layer": "0",
+        "farbe": "#c29bff",
+        "linientyp": "Volllinie (schmal)",
+        "eig_farbe": true,
+        "staerke": 0.25,
+        "x": 30.0,
+        "y": 0.0,
+        "inhalt": "L1,L2,L3,N",
+        "hoehe": 2.0,
+        "winkel": 0.0,
+        "schriftart": "Arial",
+        "einfuegepunkt": "mitte_links",
+        "tag": "VP4",
+        "prompt": "Pin 4",
+        "wert": "L1,L2,L3,N",
+        "sichtbar": false,
+        "text_dx": 0.0,
+        "text_dy": 0.0,
+        "richtungen": [
+          90,
+          270
+        ],
+        "radius": 0.5
+      },
+      {
+        "typ": "vpunkt",
+        "layer": "0",
+        "farbe": "#c29bff",
+        "linientyp": "Volllinie (schmal)",
+        "eig_farbe": true,
+        "staerke": 0.25,
+        "x": 40.0,
+        "y": 0.0,
+        "inhalt": "L1,L2,L3,N",
+        "hoehe": 2.0,
+        "winkel": 0.0,
+        "schriftart": "Arial",
+        "einfuegepunkt": "mitte_links",
+        "tag": "VP5",
+        "prompt": "Pin 5",
+        "wert": "L1,L2,L3,N",
+        "sichtbar": false,
+        "text_dx": 0.0,
+        "text_dy": 0.0,
+        "richtungen": [
+          90,
+          270
+        ],
+        "radius": 0.5
+      },
+      {
+        "typ": "vpunkt",
+        "layer": "0",
+        "farbe": "#c29bff",
+        "linientyp": "Volllinie (schmal)",
+        "eig_farbe": true,
+        "staerke": 0.25,
+        "x": 50.0,
+        "y": 0.0,
+        "inhalt": "L1,L2,L3,N",
+        "hoehe": 2.0,
+        "winkel": 0.0,
+        "schriftart": "Arial",
+        "einfuegepunkt": "mitte_links",
+        "tag": "VP6",
+        "prompt": "Pin 6",
+        "wert": "L1,L2,L3,N",
+        "sichtbar": false,
+        "text_dx": 0.0,
+        "text_dy": 0.0,
+        "richtungen": [
+          90,
+          270
+        ],
+        "radius": 0.5
+      },
+      {
+        "typ": "vpunkt",
+        "layer": "0",
+        "farbe": "#c29bff",
+        "linientyp": "Volllinie (schmal)",
+        "eig_farbe": true,
+        "staerke": 0.25,
+        "x": 60.0,
+        "y": 0.0,
+        "inhalt": "L1,L2,L3,N",
+        "hoehe": 2.0,
+        "winkel": 0.0,
+        "schriftart": "Arial",
+        "einfuegepunkt": "mitte_links",
+        "tag": "VP7",
+        "prompt": "Pin 7",
+        "wert": "L1,L2,L3,N",
+        "sichtbar": false,
+        "text_dx": 0.0,
+        "text_dy": 0.0,
+        "richtungen": [
+          90,
+          270
+        ],
+        "radius": 0.5
+      },
+      {
+        "typ": "linie",
+        "layer": "0",
+        "farbe": "#c29bff",
+        "linientyp": "Volllinie (schmal)",
+        "eig_farbe": true,
+        "staerke": 0.35,
+        "x1": 4.0,
+        "y1": -1.0,
+        "x2": 6.0,
+        "y2": 1.0
+      },
+      {
+        "typ": "maske",
+        "layer": "0",
+        "farbe": "#c29bff",
+        "linientyp": "Volllinie (schmal)",
+        "eig_farbe": true,
+        "staerke": null,
+        "x": -2.0,
+        "y": -1.0,
+        "einpolig": true,
+        "versatz": {
+          "POLE": [
+            10.45,
+            -10.149999999999999
+          ]
+        },
+        "werte": {
+          "IND": "-W",
+          "MAN": "MAN",
+          "TYP": "TYP",
+          "PER": "PER"
+        },
+        "ausgeblendet": [],
+        "platzhalter": true,
+        "pole": "3+N",
+        "rolle": "haupt",
+        "spiegel": "liste",
+        "sp_dx": 0.0,
+        "sp_dy": 0.0
+      }
+    ]
+  }
+}

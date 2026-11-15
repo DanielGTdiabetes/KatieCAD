@@ -104,9 +104,40 @@ LINIENTYPEN = {
     "Volllinie (schmal)":       {"dash": None,           "farbe": "#ffffff"},
     "Strichlinie (verdeckt)":   {"dash": (6, 4),         "farbe": "#b886fb"},
     "Strichpunktlinie (Achse)": {"dash": (12, 4, 3, 4),  "farbe": "#ff2d95"},
+    "Strich-Zweipunktlinie":    {"dash": (12, 3, 2, 3, 2, 3), "farbe": "#ff2d95"},
+    "Punktlinie":               {"dash": (1, 3),         "farbe": "#b886fb"},
     "Freihandlinie":            {"dash": (2, 3),         "farbe": "#8b7ea8"},
     "Schraffur":                {"dash": (2, 2),         "farbe": "#8b7ea8"},
 }
+# The keys above are stored in the files; these i18n keys give the displayed names.
+LINIENTYP_TEXT = {
+    "Volllinie (breit)": "lt.voll_breit", "Volllinie (schmal)": "lt.voll_schmal",
+    "Strichlinie (verdeckt)": "lt.strich", "Strichpunktlinie (Achse)": "lt.strichpunkt",
+    "Strich-Zweipunktlinie": "lt.strich2punkt", "Punktlinie": "lt.punkt",
+    "Freihandlinie": "lt.freihand", "Schraffur": "lt.schraffur",
+}
+
+
+def linientyp_text(schluessel):
+    """Displayed name of a line type ('Volllinie (schmal)' -> 'Continua (fina)')."""
+    from katiecad.common.i18n import tr
+    t = LINIENTYP_TEXT.get(schluessel)
+    return tr(t) if t else str(schluessel or "")
+
+
+def linientyp_schluessel(text):
+    """Stored key of a displayed line type name (unknown texts stay as they are)."""
+    if text in LINIENTYPEN:
+        return text
+    for k in LINIENTYPEN:
+        if linientyp_text(k) == text:
+            return k
+    return text
+
+
+def linientypen_texte():
+    """Displayed names of all line types in the order of LINIENTYPEN."""
+    return [linientyp_text(k) for k in LINIENTYPEN]
 
 RASTER_GROESSEN = [1, 2, 5, 10, 20, 25, 50, 100]
 
@@ -632,6 +663,7 @@ BEFEHLE = {
     "ORTHO": "ortho",
     "MASSTEXT": "masstext", "BEMTEXT": "masstext", "DIMTEXT": "masstext",
     "VERSCHIEBEN": "move", "V": "move", "MOVE": "move", "M": "move",
+    "MOVEOFFSET": "versatz_verschieben", "DESPLAZAR": "versatz_verschieben",
     "KOPIEREN": "copy", "KO": "copy", "COPY": "copy", "CO": "copy", "CP": "copy",
     "COPYBASE": "copybase", "KOPIERENBASIS": "copybase",
     "KOPIERENMITBASISPUNKT": "copybase", "KOPIERENMITBASIS": "copybase",
@@ -648,6 +680,7 @@ BEFEHLE = {
     "LEITUNG": "tool:leitung",
     "QV": "tool:querverweis", "QUERVERWEIS": "tool:querverweis",
     "PIN": "tool:vpunkt", "VERBINDUNG": "tool:verbindung",
+    "CODO": "tool:verbindung", "BIFURCACION": "tool:verbindung", "BIFURCACIÓN": "tool:verbindung",
     "MASKE": "tool:maske", "ELEKTROMASKE": "tool:maske",
     "KLEMME": "tool:klemme",
     "FTEXT": "tool:ftext", "FUNKTIONSTEXT": "tool:ftext",
@@ -657,6 +690,12 @@ BEFEHLE = {
     "MESS": "messen", "MESSEN": "messen", "DI": "messen", "DIST": "messen",
     "DISTANZ": "messen", "MEASURE": "messen",
     "NUMMERIEREN": "nummerieren", "AUTONUM": "nummerieren", "GERAETENUMMERN": "nummerieren",
+    "UMBENENNEN": "umbenennen_zaehler", "RENOMBRAR": "umbenennen_zaehler",
+    "RENAMEDEVICES": "umbenennen_zaehler",
+    "KLEMMENNUMMERN": "klemmen_nummern", "NUMBORNES": "klemmen_nummern",
+    "RENUMBERTERMINALS": "klemmen_nummern",
+    "KLEMMENLEISTE": "klemmenleiste", "REGLETA": "klemmenleiste", "TERMINALSTRIP": "klemmenleiste",
+    "DRAHTNUMMERN": "drahtnummern", "WIRENUM": "drahtnummern", "NUMHILOS": "drahtnummern",
     "QSELECT": "schnellauswahl", "SCHNELLAUSWAHL": "schnellauswahl", "QS": "schnellauswahl",
     "VERSATZ": "versatz", "OFFSET": "versatz", "O": "versatz",
     "LAENGE": "laenge", "LÄNGE": "laenge", "LENGTHEN": "laenge", "LEN": "laenge",
@@ -670,6 +709,9 @@ BEFEHLE = {
     "KUGEL": "3d:neu:kugel", "SPHERE": "3d:neu:kugel",
     "EXTRUDIEREN": "3d:extrudieren", "EXT": "3d:extrudieren", "EXTRUDE": "3d:extrudieren",
     "LOCH": "3d:loch", "BOHRUNG": "3d:loch", "HOLE": "3d:loch",
+    "MECHANIK": "3d:mechanik", "MECANIZADO": "3d:mechanik", "MACHINING": "3d:mechanik",
+    "STEP": "3d:modell", "MODELO3D": "3d:modell", "MODELL3D": "3d:modell", "IMPORT3D": "3d:modell",
+    "PLATZIEREN": "3d:platzieren", "COLOCAR": "3d:platzieren", "PLACE": "3d:platzieren",
     "3DMASS": "3d:mass", "MASSE": "3d:mass",
     "3DDREHEN": "3d:drehen", "3DROTATE": "3d:drehen", "DREHEN3D": "3d:drehen",
     "3DABRUNDEN": "3d:abrunden", "3DFILLET": "3d:abrunden",
@@ -2122,9 +2164,11 @@ class Kabelkanal(Polylinie):
     when the piece is shown in 3D."""
 
     def __init__(self, punkte, geschlossen=False, breite=60.0, hoehe=40.0, art="gerade",
-                 schraffur="", schraffur_abstand=20.0, **kw):
+                 schraffur="", schraffur_abstand=20.0, ref="", schiene=False, **kw):
         super().__init__(punkte, False, **kw)
         self.typ = "kabelkanal"
+        self.ref = str(ref or "")             # article / catalogue reference (duct list)
+        self.schiene = bool(schiene)          # DIN rail drawn with the duct tool
         self.schraffur = schraffur if schraffur in WAND_SCHRAFFUREN else ""
         self.schraffur_abstand = max(1.0, float(schraffur_abstand))
         self.art = art if art in KANAL_ARTEN else "gerade"
@@ -4216,6 +4260,46 @@ class Leitung(Linie):
         self.auto = bool(auto)
 
 
+class Drahtnummer(Text):
+    """Wire number (connection definition point): a text whose insertion
+    point lies ON a wire. Every wire piece that is electrically the same
+    conductor (up to the next terminal or device pin) carries the same number;
+    see katiecad.electrical.drahtnummern.
+
+    auto_text: text written by the automatic numbering. If ``inhalt`` differs
+               from it (the user typed a number), the label counts as manual and
+               is never overwritten. Empty = placed by hand = manual.
+    aderfarbe / querschnitt: optional colour (e.g. "BK") and cross-section
+               (e.g. "1,5") of the wire, shown in the terminal diagram."""
+
+    def __init__(self, x, y, inhalt="", hoehe=2.5, winkel=0.0,
+                 einfuegepunkt="unten_zentriert", auto_text="", aderfarbe="",
+                 querschnitt="", **kw):
+        kw.setdefault("layer", E_LINES)
+        kw.setdefault("farbe", LEITUNG_FARBE)
+        kw.setdefault("eig_farbe", True)
+        super().__init__(x, y, inhalt, hoehe=hoehe, winkel=winkel,
+                         einfuegepunkt=einfuegepunkt, **kw)
+        self.typ = "drahtnummer"
+        self.auto_text = str(auto_text or "")
+        self.aderfarbe = str(aderfarbe or "").strip()
+        self.querschnitt = str(querschnitt or "").strip()
+
+    def to_dict(self):
+        d = super().to_dict()
+        for k in ("aderfarbe", "querschnitt"):
+            if not d.get(k):
+                d.pop(k, None)          # files stay as before when not used
+        return d
+
+    @property
+    def manuell(self):
+        return not self.auto_text or self.inhalt.strip() != self.auto_text
+
+    def griffe(self):
+        return [("p", self.x, self.y)]
+
+
 class Verbindungspunkt(AttributDefinition):
     """Connection point: circle (diameter 1 mm) + label to its right
     (text height 2.0 mm).
@@ -5096,14 +5180,33 @@ class Klemme(_FestMaske):
     KASTEN_H = 8.0
     KASTEN_NUM = 2.5
 
-    def __init__(self, x, y, werte=None, darstellung="kreis", **kw):
+    BRUECKEN = ("", "oben", "unten", "beide")
+
+    def __init__(self, x, y, werte=None, darstellung="kreis", trennplatte=False,
+                 bruecke="", montage=None, **kw):
         super().__init__("klemme", x, y, werte, **kw)
         self.darstellung = darstellung if darstellung in self.DARSTELLUNGEN else "kreis"
+        # Partition plate AFTER this terminal (terminal strip graphic / mounting order)
+        self.trennplatte = bool(trennplatte)
+        # Jumper to the NEXT terminal of the strip (mounting order) on the top / bottom side,
+        # set in the terminal strip editor (without drawing it as wires)
+        self.bruecke = bruecke if bruecke in self.BRUECKEN else ""
+        # Explicit position in the strip (terminal strip editor); None = by number
+        try:
+            self.montage = None if montage is None else int(montage)
+        except (TypeError, ValueError):
+            self.montage = None
 
     def to_dict(self):
         d = super().to_dict()
         if self.darstellung == "kreis":
             d.pop("darstellung", None)          # old files / circle: nothing to save
+        if not self.trennplatte:
+            d.pop("trennplatte", None)
+        if not self.bruecke:
+            d.pop("bruecke", None)
+        if self.montage is None:
+            d.pop("montage", None)
         return d
 
     def _hoehe(self):
@@ -5349,8 +5452,10 @@ class Koerper3D(Element):
     def __init__(self, art="prisma", profil=None, z0=0.0, hoehe=10.0, spitze=None,
                  rund=False, kugel=None, bez="", loecher=None, ebene=None,
                  ausschnitte=None, glatt=None, r_oben=0.0, r_unten=0.0, netzdaten=None,
-                 kanal=None, **kw):
+                 kanal=None, geraet="", **kw):
         super().__init__("koerper3d", **kw)
+        # imported device model: equipment identifier of the device it stands for (-K1)
+        self.geraet = str(geraet or "")
         # cable duct piece: {"art": "gerade" | "verbinder" | "winkel" | "t", "breite": mm}
         self.kanal = dict(kanal) if isinstance(kanal, dict) else None
         # art "netz": merged body (union of several bodies) = free mesh
@@ -5359,6 +5464,10 @@ class Koerper3D(Element):
             "p": [[float(c) for c in p] for p in netzdaten.get("p", [])],
             "k": [[int(i), int(j)] for i, j in netzdaten.get("k", [])],
             "f": [[int(i) for i in f] for f in netzdaten.get("f", [])]}
+        if self.netzdaten and netzdaten.get("fang"):
+            # snap points of an imported device model: [x, y, z, kind] (see fileio/modell3d.py)
+            self.netzdaten["fang"] = [[float(q[0]), float(q[1]), float(q[2]), str(q[3])]
+                                      for q in netzdaten["fang"]]
         self._netz_cache = None
         self.r_oben, self.r_unten = float(r_oben or 0.0), float(r_unten or 0.0)
         self.glatt = [bool(g) for g in glatt] if glatt else None
@@ -5379,13 +5488,18 @@ class Koerper3D(Element):
                 "ebene": _ebene_tuple(a["ebene"]),
                 "profil": [(float(p[0]), float(p[1])) for p in a["profil"]],
                 "tiefe": None if a.get("tiefe") is None else float(a["tiefe"]),
-                "rund": bool(a.get("rund", False))})
+                "rund": bool(a.get("rund", False)),
+                # machining: label and centre on the face (see model/mechanik.py)
+                "bez": str(a.get("bez", "") or ""),
+                "pos": None if a.get("pos") is None else [float(a["pos"][0]), float(a["pos"][1])]})
 
     # ---- geometry ---------------------------------------------------------
     def _netzdaten_abbilden(self, f):
         """Applies f(x, y, z) -> (x, y, z) to all points of a merged body."""
         if self.netzdaten:
             self.netzdaten["p"] = [list(f(*p)) for p in self.netzdaten["p"]]
+            if self.netzdaten.get("fang"):
+                self.netzdaten["fang"] = [list(f(*q[:3])) + [q[3]] for q in self.netzdaten["fang"]]
         self._netz_cache = None
 
     def netz(self):
@@ -5438,11 +5552,12 @@ class Koerper3D(Element):
         self.loecher.append((float(x), float(y), float(r),
                              None if tiefe is None else abs(float(tiefe))))
 
-    def ausschnitt_hinzufuegen(self, ebene, profil, tiefe=None, rund=False):
+    def ausschnitt_hinzufuegen(self, ebene, profil, tiefe=None, rund=False, bez="", pos=None):
         self.ausschnitte.append({"ebene": _ebene_tuple(ebene),
                                  "profil": [(float(x), float(y)) for (x, y) in profil],
                                  "tiefe": None if tiefe is None else abs(float(tiefe)),
-                                 "rund": bool(rund)})
+                                 "rund": bool(rund), "bez": str(bez or ""),
+                                 "pos": None if pos is None else [float(pos[0]), float(pos[1])]})
 
     def koerper(self):
         return [self]
@@ -5661,8 +5776,15 @@ class Koerper3D(Element):
         d["kugel"] = list(self.kugel) if self.kugel else None
         d["loecher"] = [list(l) for l in self.loecher]
         d["ebene"] = list(self.ebene) if self.ebene else None
-        d["ausschnitte"] = [{"ebene": list(a["ebene"]), "profil": [list(p) for p in a["profil"]],
-                             "tiefe": a["tiefe"], "rund": a["rund"]} for a in self.ausschnitte]
+        d["ausschnitte"] = []
+        for a in self.ausschnitte:
+            ad = {"ebene": list(a["ebene"]), "profil": [list(p) for p in a["profil"]],
+                  "tiefe": a["tiefe"], "rund": a["rund"]}
+            if a.get("bez"):
+                ad["bez"] = a["bez"]
+            if a.get("pos") is not None:
+                ad["pos"] = list(a["pos"])
+            d["ausschnitte"].append(ad)
         return d
 
 
@@ -6130,6 +6252,36 @@ def einpolig_ignorieren(flag):
     """True if an element carrying the single-pole flag `flag` must be left out of the
     evaluations (flag set and the project option 'evaluate single-pole too' off)."""
     return bool(flag) and not EINPOLIG_MIT[0]
+
+
+_HAT_DZ = {}
+
+
+def kann_z(el):
+    """True if the element moves in Z (3D bodies, blocks, sketches, 3D texts and
+    dimensions: verschieben(dx, dy, dz)); 2D elements lie on z = 0."""
+    import inspect
+    k = type(el)
+    if k not in _HAT_DZ:
+        try:
+            _HAT_DZ[k] = "dz" in inspect.signature(k.verschieben).parameters
+        except (TypeError, ValueError, AttributeError):
+            _HAT_DZ[k] = False
+    return _HAT_DZ[k]
+
+
+def versetzen(objekte, dx, dy, dz=0.0):
+    """Moves the objects by an exact offset (ΔX, ΔY, ΔZ in mm). dz only applies to
+    objects that can move in Z (see kann_z). -> number of objects that ignored dz."""
+    ohne_z = 0
+    for el in objekte:
+        if dz and kann_z(el):
+            el.verschieben(dx, dy, dz)
+        else:
+            el.verschieben(dx, dy)
+            if dz:
+                ohne_z += 1
+    return ohne_z
 
 
 def ist_einpolig(el):

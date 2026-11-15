@@ -80,6 +80,13 @@ def _datei_oeffnen(verzeichnis, kopf):
     try:
         os.makedirs(verzeichnis, exist_ok=True)
         pf = os.path.join(verzeichnis, DATEINAME)
+        if _datei is not None:          # Windows cannot rename a file that is still open
+            with _lock:
+                try:
+                    _datei.close()
+                except Exception:
+                    pass
+                _datei = None
         if os.path.exists(pf):
             try:
                 os.replace(pf, pf + ".old")

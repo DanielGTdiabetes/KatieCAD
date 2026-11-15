@@ -12,6 +12,7 @@ also pulls closed 2D shapes up or down into solids ("push/pull").
 """
 
 import math
+import os
 import re
 from copy import deepcopy
 import tkinter as tk
@@ -19,12 +20,13 @@ from tkinter import ttk
 from katiecad.ui import meldung as messagebox
 
 from katiecad.common.i18n import tr
+from katiecad.model.kanal_katalog import begrenzen as kanal_begrenzen
 from katiecad.model.core import (FARBEN, UI_SCHRIFT, Koerper3D, Gruppe3D, Skizze3D, kanal_rechteck, kanal_kette, kanal_versatz, kanal_aus_koerper, kanal_formstueck, Bemassung3D, Text3D, Viewport,
                                  quader, zylinder, kegel, pyramide, kugel)
 from katiecad.model import geom3d as G
 from katiecad.model import szene3d as S
 from katiecad.model import schrank as SCHR
-from katiecad.ui.dialogs import _modal, _LayoutNameDialog
+from katiecad.ui.dialogs import _modal, _LayoutNameDialog, _zentrieren
 
 # basic 2D tools of the toolbar -> their 3D counterparts (drawing on the work plane / 3D dimension)
 WERKZEUG_3D = {"linie": "linie", "polylinie": "poly", "kreis": "kreis", "rechteck": "rechteck",
@@ -365,6 +367,229 @@ class AbrundDialog(tk.Toplevel):
         self.destroy()
 
 
+class MechanikDialog(tk.Toplevel):
+    """Machining on a face: template, round / rectangular, size, position (centre from the
+    lower left corner of the face), rows x columns with pitch, depth (0 = through), label.
+    Values in the drawing unit. result = dict (see mechanik_ergebnis) or None."""
+
+    def __init__(self, parent, einheit, vorlagen, x, y, breite, hoehe, letzt=None):
+        super().__init__(parent)
+        self.result = None
+        self._vorlagen = list(vorlagen)
+        l = letzt or {}
+        self.title(tr("d3.mech.titel"))
+        self.transient(parent)
+        self.configure(bg=FARBEN["bg_mittel"])
+        self.resizable(False, False)
+        f = ttk.Frame(self, padding=12)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=tr("d3.mech.flaeche", b="%g" % round(breite, 1), h="%g" % round(hoehe, 1),
+                             e=einheit), style="Title.TLabel").grid(row=0, column=0, columnspan=4,
+                                                                    sticky=tk.W)
+        ttk.Label(f, text=tr("d3.mech.vorlage")).grid(row=1, column=0, sticky=tk.W, pady=(8, 2))
+        self.vorlage = tk.StringVar(value=l.get("vorlage", ""))
+        cb = ttk.Combobox(f, textvariable=self.vorlage, state="readonly", width=34,
+                          values=[v["name"] for v in self._vorlagen])
+        cb.grid(row=1, column=1, columnspan=3, sticky=tk.W, pady=(8, 2))
+        cb.bind("<<ComboboxSelected>>", lambda ev: self._vorlage_gewaehlt())
+        self.form = tk.StringVar(value=l.get("form", "rund"))
+        ff = ttk.Frame(f)
+        ff.grid(row=2, column=1, columnspan=3, sticky=tk.W)
+        for wert in ("rund", "rechteck"):
+            ttk.Radiobutton(ff, text=tr("d3.mech.form." + wert), value=wert,
+                            variable=self.form).pack(side=tk.LEFT, padx=(0, 12))
+        self.v = {}
+        felder = (("d", 3, 0), ("b", 4, 0), ("h", 4, 2), ("x", 5, 0), ("y", 5, 2),
+                  ("nx", 6, 0), ("dx", 6, 2), ("ny", 7, 0), ("dy", 7, 2), ("tiefe", 8, 0))
+        vorg = {"d": l.get("d", 22.5), "b": l.get("b", 92), "h": l.get("h", 92), "x": x, "y": y,
+                "nx": l.get("nx", 1), "dx": l.get("dx", 30), "ny": l.get("ny", 1),
+                "dy": l.get("dy", 30), "tiefe": l.get("tiefe", 3)}
+        for key, row, col in felder:
+            ttk.Label(f, text=tr("d3.mech." + key)).grid(row=row, column=col, sticky=tk.W, pady=2,
+                                                        padx=(0 if col == 0 else 10, 4))
+            var = tk.StringVar(value="%g" % vorg[key])
+            ttk.Entry(f, textvariable=var, width=9).grid(row=row, column=col + 1, sticky=tk.W, pady=2)
+            self.v[key] = var
+        ttk.Label(f, text=tr("d3.mech.bez")).grid(row=9, column=0, sticky=tk.W, pady=2)
+        self.bez = tk.StringVar(value=l.get("bez", ""))
+        ttk.Entry(f, textvariable=self.bez, width=36).grid(row=9, column=1, columnspan=3, sticky=tk.W)
+        ttk.Label(f, text=tr("d3.mech.hinweis", e=einheit), style="Hint.TLabel", wraplength=420,
+                  justify=tk.LEFT).grid(row=10, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
+        bt = ttk.Frame(f)
+        bt.grid(row=11, column=0, columnspan=4, pady=(10, 0))
+        ttk.Button(bt, text="OK", command=self._ok).pack(side=tk.LEFT, padx=6)
+        ttk.Button(bt, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=6)
+        self.bind("<Return>", lambda ev: self._ok())
+        self.bind("<Escape>", lambda ev: self.destroy())
+        _zentrieren(self, parent)
+        _modal(self)
+
+    def _vorlage_gewaehlt(self):
+        v = next((v for v in self._vorlagen if v["name"] == self.vorlage.get()), None)
+        if v is None:
+            return
+        self.form.set(v["form"])
+        if v["form"] == "rund":
+            self.v["d"].set("%g" % v["d"])
+        else:
+            self.v["b"].set("%g" % v["b"])
+            self.v["h"].set("%g" % v["h"])
+        self.bez.set(v["name"])
+
+    def _ok(self):
+        werte = {k: var.get() for k, var in self.v.items()}
+        erg = mechanik_ergebnis(self.form.get(), werte, self.bez.get(), self.vorlage.get())
+        if erg is None:
+            messagebox.showerror(tr("d3.titel"), tr("d3.msg.zahl"), parent=self)
+            return
+        self.result = erg
+        self.destroy()
+
+
+def mechanik_ergebnis(form, werte, bez="", vorlage=""):
+    """Parses the machining dialog (decimal comma allowed). Sizes must be > 0, counts >= 1,
+    depth >= 0. -> dict or None."""
+    out = {"form": form if form in ("rund", "rechteck") else "rund", "bez": str(bez).strip(),
+           "vorlage": vorlage}
+    try:
+        for k in ("d", "b", "h", "x", "y", "dx", "dy", "tiefe"):
+            out[k] = float(str(werte.get(k, "0")).strip().replace(",", ".") or 0)
+        for k in ("nx", "ny"):
+            out[k] = int(float(str(werte.get(k, "1")).strip().replace(",", ".") or 1))
+    except ValueError:
+        return None
+    groesse = out["d"] if out["form"] == "rund" else min(out["b"], out["h"])
+    if groesse <= 0 or out["nx"] < 1 or out["ny"] < 1 or out["tiefe"] < 0:
+        return None
+    return out
+
+
+class GeraetePlatzierenDialog(tk.Toplevel):
+    """List of the devices with a 3D model: identifier, type, model (own / of the type),
+    placed. result = the chosen row (dict) or None."""
+
+    def __init__(self, parent, zeilen):
+        super().__init__(parent)
+        self.result = None
+        self._zeilen = [z for z in zeilen if z["modell"]]
+        ohne = len(zeilen) - len(self._zeilen)
+        self.title(tr("d3.platz.titel"))
+        self.transient(parent)
+        self.configure(bg=FARBEN["bg_mittel"])
+        f = ttk.Frame(self, padding=12)
+        f.pack(fill=tk.BOTH, expand=True)
+        spalten = ("ind", "typ", "modell", "platziert")
+        self.tree = ttk.Treeview(f, columns=spalten, show="headings", height=14,
+                                 selectmode="browse")
+        for c, b in zip(spalten, (90, 160, 240, 80)):
+            self.tree.heading(c, text=tr("d3.platz.col." + c))
+            self.tree.column(c, width=b, anchor=tk.W)
+        self.tree.pack(fill=tk.BOTH, expand=True)
+        erster = None
+        for i, z in enumerate(self._zeilen):
+            iid = self.tree.insert("", tk.END, iid=str(i), values=(
+                z["ind"], z["typ"], os.path.basename(z["modell"]) + (
+                    "  (" + tr("d3.platz.typ") + ")" if z["quelle"] == "artikel" else
+                    "  (" + tr("d3.platz.symbol") + ")" if z["quelle"] == "symbol" else ""),
+                "✓" if z["platziert"] else ""))
+            if erster is None and not z["platziert"]:
+                erster = iid
+        if erster is not None:
+            self.tree.selection_set(erster)
+            self.tree.see(erster)
+        ttk.Label(f, text=tr("d3.platz.hinweis", n=ohne), style="Hint.TLabel", wraplength=560,
+                  justify=tk.LEFT).pack(anchor=tk.W, pady=(8, 0))
+        bt = ttk.Frame(f)
+        bt.pack(pady=(10, 0))
+        ttk.Button(bt, text=tr("d3.platz.ok"), command=self._ok).pack(side=tk.LEFT, padx=6)
+        ttk.Button(bt, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=6)
+        self.tree.bind("<Double-1>", lambda ev: self._ok())
+        self.bind("<Return>", lambda ev: self._ok())
+        self.bind("<Escape>", lambda ev: self.destroy())
+        _zentrieren(self, parent)
+        _modal(self)
+
+    def _ok(self):
+        sel = self.tree.selection()
+        if not sel:
+            return
+        self.result = self._zeilen[int(sel[0])]
+        self.destroy()
+
+
+class ModellImportDialog(tk.Toplevel):
+    """Import of a device model: front axis of the model, mesh tolerance, equipment
+    identifier and own snap points (fixing holes, DIN rail height).
+    vorgabe(front) -> text of the points already stored in the cache (or None).
+    result = {"front", "toleranz", "ind", "punkte": (points, din)} or None."""
+
+    def __init__(self, parent, datei, ist_step, vorgabe=None):
+        super().__init__(parent)
+        self._vorgabe = vorgabe
+        self.result = None
+        self.title(tr("d3.modell.titel"))
+        self.transient(parent)
+        self.configure(bg=FARBEN["bg_mittel"])
+        self.resizable(False, False)
+        f = ttk.Frame(self, padding=12)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=datei, style="Title.TLabel").grid(row=0, column=0, columnspan=2, sticky=tk.W)
+        ttk.Label(f, text=tr("d3.modell.front")).grid(row=1, column=0, sticky=tk.W, pady=(8, 2))
+        self.front = tk.StringVar(value="+Z")
+        ttk.Combobox(f, textvariable=self.front, state="readonly", width=8,
+                     values=["+Z", "-Z", "+Y", "-Y", "+X", "-X"]).grid(row=1, column=1, sticky=tk.W,
+                                                                      pady=(8, 2))
+        self.tol = tk.StringVar(value="0.5")
+        if ist_step:
+            ttk.Label(f, text=tr("d3.modell.toleranz")).grid(row=2, column=0, sticky=tk.W, pady=2)
+            ttk.Entry(f, textvariable=self.tol, width=8).grid(row=2, column=1, sticky=tk.W)
+        ttk.Label(f, text=tr("d3.modell.ind")).grid(row=3, column=0, sticky=tk.W, pady=2)
+        self.ind = tk.StringVar(value="")
+        ttk.Entry(f, textvariable=self.ind, width=14).grid(row=3, column=1, sticky=tk.W)
+        ttk.Label(f, text=tr("d3.modell.punkte")).grid(row=4, column=0, columnspan=2, sticky=tk.W,
+                                                       pady=(8, 2))
+        self.punkte = tk.StringVar(value="")
+        ttk.Entry(f, textvariable=self.punkte, width=48).grid(row=5, column=0, columnspan=2,
+                                                              sticky=tk.W)
+        ttk.Label(f, text=tr("d3.modell.punkte_hinweis"), style="Hint.TLabel", wraplength=380,
+                  justify=tk.LEFT).grid(row=6, column=0, columnspan=2, sticky=tk.W, pady=(2, 0))
+        self.front.trace_add("write", lambda *a: self._vorgabe_laden())
+        self._vorgabe_laden()
+        ttk.Label(f, text=tr("d3.modell.hinweis"), style="Hint.TLabel", wraplength=380,
+                  justify=tk.LEFT).grid(row=7, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+        bt = ttk.Frame(f)
+        bt.grid(row=8, column=0, columnspan=2, pady=(10, 0))
+        ttk.Button(bt, text="OK", command=self._ok).pack(side=tk.LEFT, padx=6)
+        ttk.Button(bt, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=6)
+        self.bind("<Return>", lambda ev: self._ok())
+        self.bind("<Escape>", lambda ev: self.destroy())
+        _zentrieren(self, parent)
+        _modal(self)
+
+    def _ok(self):
+        try:
+            t = float(self.tol.get().strip().replace(",", "."))
+            if t <= 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror(tr("d3.titel"), tr("d3.msg.zahl"), parent=self)
+            return
+        from katiecad.fileio.modell3d import punkte_lesen, PunkteFehler
+        try:
+            punkte = punkte_lesen(self.punkte.get())
+        except PunkteFehler as ex:
+            messagebox.showerror(tr("d3.titel"), tr("d3.modell.punkte_fehler", p=str(ex)), parent=self)
+            return
+        self.result = {"front": self.front.get(), "toleranz": t, "ind": self.ind.get().strip(),
+                       "punkte": punkte}
+        self.destroy()
+
+    def _vorgabe_laden(self):
+        """Shows the points already stored for this source and front axis."""
+        if self._vorgabe is not None:
+            self.punkte.set(self._vorgabe(self.front.get()) or "")
+
+
 class MassDialog(tk.Toplevel):
     """Edit the dimensions of a body / sketch. result = {key: value} in display units."""
 
@@ -436,7 +661,7 @@ def _vorzeichen(k):
 
 
 class Ansicht3D(tk.Frame):
-    MODI = ("flaeche", "linie", "kreis", "rechteck", "poly", "bem", "kanal", "kanalverb", "pivot", "text", "messen", "verschieben", "strecken")
+    MODI = ("flaeche", "linie", "kreis", "rechteck", "poly", "bem", "kanal", "kanalverb", "pivot", "text", "messen", "verschieben", "strecken", "mechanik")
     SKIZZEN = ("linie", "kreis", "rechteck", "poly")
 
     def __init__(self, app):
@@ -1228,6 +1453,8 @@ class Ansicht3D(tk.Frame):
             self._modus_ende()
             self.info_var.set(tr("d3.msg.ebene_gesetzt"))
             self.zeichne()
+        elif m == "mechanik":
+            self._mechanik_klick(e)
         elif m == "kanal":
             self._kanal_klick(e)
         elif m == "kanalverb":
@@ -1442,8 +1669,14 @@ class Ansicht3D(tk.Frame):
 
     def _kanal_koerper(self, ebene, punkte, art, breite, hoehe):
         daten = self.app._kanal_layer_daten()
+        kd = {"art": art, "breite": breite, "hoehe": hoehe}
+        if self.app._kanal_ref:
+            kd["ref"] = self.app._kanal_ref
+        schiene = self.app._kanal_schiene and art == "gerade"
+        if schiene:
+            kd["schiene"] = True
         return Koerper3D("prisma", profil=punkte, z0=0.0, hoehe=hoehe, ebene=ebene,
-                         bez=tr("kanal.bez." + art), kanal={"art": art, "breite": breite}, **daten)
+                         bez=tr("kanal.bez." + ("schiene" if schiene else art)), kanal=kd, **daten)
 
     def _kanal_klick(self, e):
         """Each click after the first creates one straight duct piece (chain)."""
@@ -1462,6 +1695,7 @@ class Ansicht3D(tk.Frame):
             self.info_var.set(tr("d3.msg.kanal_weiter"))
         else:
             q = sk["pts"][-1]
+            p = kanal_begrenzen(q, p, self.app._kanal_max_laenge())    # max. one bar
             if math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6:
                 b, h = self._kanal_masse()
                 self.app._snapshot()
@@ -1609,6 +1843,7 @@ class Ansicht3D(tk.Frame):
         q0 = sk["pts"][0]
         if sk["form"] == "kanal":
             q = sk["pts"][-1]
+            p = kanal_begrenzen(q, p, self.app._kanal_max_laenge())
             if math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6:
                 b, h = self._kanal_masse()
                 vp = kanal_versatz(sk["pts"] + [p], self.zustand.get("kanal_ausr", "mitte"), b)
@@ -1633,6 +1868,18 @@ class Ansicht3D(tk.Frame):
     # ------------------------------------------------------------------
     # mouse: selection, cube, manipulator
     # ------------------------------------------------------------------
+    def _platten_punkt(self, e, y0):
+        """Point on the vertical plane y = y0 under the mouse (grid in x and z)."""
+        o, d = self.kamera.strahl(e.x, e.y, *self._mitte())
+        if abs(d[1]) < 1e-9:
+            return None
+        t = (y0 - o[1]) / d[1]
+        p = (o[0] + t * d[0], y0, o[2] + t * d[2])
+        r = self._raster_fang()
+        if r:
+            p = (round(p[0] / r) * r, p[1], round(p[2] / r) * r)
+        return p
+
     def _bodenpunkt(self, e, z=0.0):
         p = self.kamera.auf_ebene(e.x, e.y, *self._mitte(), z)
         if p is None:
@@ -2076,9 +2323,16 @@ class Ansicht3D(tk.Frame):
         """Base point of a body being placed: grid, then OSNAP: a corner/centre of the new body
         snaps onto a snap point of an existing object (to line bodies up or join them).
         -> (position or None, [(snap point, kind)])"""
-        p = self._bodenpunkt(e, pl["z"])
+        if pl.get("ebene_y") is not None:
+            p = self._platten_punkt(e, pl["ebene_y"])
+        else:
+            p = self._bodenpunkt(e, pl["z"])
         if p is None:
             return None, []
+        if pl.get("hut") is not None:                # device near a DIN rail: onto its axis
+            q = S.auf_hutschiene(self._sichtbare(), p, pl["hut"])
+            if q is not None:
+                return q
         if not self.app.osnap.get():
             return p, []
         mx, my = self._mitte()
@@ -2140,6 +2394,41 @@ class Ansicht3D(tk.Frame):
     # ------------------------------------------------------------------
     # bore, extrude, size, block
     # ------------------------------------------------------------------
+    def _mechanik_klick(self, e):
+        """Machining: the clicked face gets cut-outs / holes from the dialog (template, size,
+        position from the lower left corner, rows x columns). The mode stays on for the
+        next face; Esc ends it."""
+        from katiecad.model import mechanik as M
+        r = S.flaeche_pick(self._sichtbare(), self.kamera, *self._mitte(), e.x, e.y)
+        if r is None:
+            self.info_var.set(tr("d3.msg.keine_flaeche"))
+            return
+        k, _eb, pts = r
+        fe = M.flaechen_ebene(pts, k.zentrum3())
+        if fe is None:
+            self.info_var.set(tr("d3.msg.keine_flaeche"))
+            return
+        ebene, bw, bh = fe
+        fak = self.app._einh_faktor()
+        p = self._lokal_punkt(e, ebene) or (bw / 2.0, bh / 2.0)
+        letzt = dict(self.zustand.get("mechanik") or {})
+        dlg = MechanikDialog(self.app.root, self.app.einheit.get(), self.app._mechanik_vorlagen(),
+                             round(p[0] / fak, 2), round(p[1] / fak, 2), bw / fak, bh / fak, letzt)
+        self.app.root.wait_window(dlg)
+        if not dlg.result:
+            return
+        v = dlg.result
+        self.zustand["mechanik"] = {kk: v[kk] for kk in v if kk not in ("x", "y")}
+        mitten = M.positionen(v["x"] * fak, v["y"] * fak, v["nx"], v["dx"] * fak,
+                              v["ny"], v["dy"] * fak)
+        self.app._snapshot()
+        n = M.mechanisieren(self.app.elemente, ebene, v["form"], mitten, d=v["d"] * fak,
+                            b=v["b"] * fak, h=v["h"] * fak, tiefe=v["tiefe"] * fak, bez=v["bez"],
+                            koerper=k)
+        self.app.redraw()
+        self.zeichne()
+        self.info_var.set(tr("d3.msg.mech_fertig", n=n, m=len(mitten) - n))
+
     def loch_dialog(self):
         """Bore / pocket from the selected sketches into the body they lie on."""
         sk = [x for x in self.app.auswahl if isinstance(x, Skizze3D)]
@@ -2310,6 +2599,8 @@ class Ansicht3D(tk.Frame):
                 m.add_command(label=tr("d3.ctx.mass"), command=self.massdialog)
             m.add_command(label=tr("d3.ctx.verschieben_bp"),
                           command=lambda: self.punkt_verschieben(False))
+            m.add_command(label=tr("menu.bearbeiten.versatz_verschieben"),
+                          command=self.app.versatz_verschieben)
             m.add_command(label=tr("d3.ctx.kopieren"), command=self._ctx_kopieren)
             m.add_command(label=tr("d3.ctx.kopieren_bp"),
                           command=lambda: self.punkt_verschieben(True))
@@ -2359,7 +2650,11 @@ class Ansicht3D(tk.Frame):
         (with object snap) and is put down with a click."""
         self._kopie_starten([x for x in self.app.auswahl if S.ist_raum(x)])
 
-    def _kopie_starten(self, quellen):
+    def _kopie_starten(self, quellen, ref=None, ebene_y=None, info=None):
+        """The objects hang on the mouse and are put down with a click. ref: point of the
+        objects that follows the mouse (default: lowest front left corner); ebene_y: the
+        mouse moves on the vertical plane y = ebene_y (the front of a mounting plate)
+        instead of the floor."""
         if not quellen:
             self.info_var.set(tr("d3.msg.kopie_nichts"))
             return
@@ -2370,14 +2665,123 @@ class Ansicht3D(tk.Frame):
             b = x.bbox3() if hasattr(x, "bbox3") else None
             if b:
                 bs.append(b)
-        if bs:
-            ref = (min(b[0] for b in bs), min(b[1] for b in bs), min(b[2] for b in bs))
-        else:
-            ref = (0.0, 0.0, 0.0)
+        if ref is None:
+            if bs:
+                ref = (min(b[0] for b in bs), min(b[1] for b in bs), min(b[2] for b in bs))
+            else:
+                ref = (0.0, 0.0, 0.0)
+        hut = None                       # DIN rail point of a device model, relative to ref
+        for x in vorlagen:
+            for q in (getattr(x, "netzdaten", None) or {}).get("fang", ()):
+                if q[3] == "hutschiene":
+                    hut = (q[0] - ref[0], q[1] - ref[1], q[2] - ref[2])
         self._platz = {"art": None, "par": None, "z": ref[2], "maus": None,
-                       "kopie": vorlagen, "ref": ref}
-        self.info_var.set(tr("d3.msg.kopie_platzieren"))
+                       "kopie": vorlagen, "ref": ref, "ebene_y": ebene_y, "hut": hut}
+        self.info_var.set(info or tr("d3.msg.kopie_platzieren"))
         self.zeichne()
+
+    def montageplatte_y(self):
+        """y of the front face of the first visible mounting plate, or None."""
+        for el in self._sichtbare():
+            for t in getattr(el, "teile", ()):
+                if getattr(t, "bez", "") == "Montageplatte":
+                    b = t.bbox3()
+                    if b:
+                        return b[1]
+        return None
+
+    def geraete_platzieren(self):
+        """3D > Place devices: devices of the project with a 3D model (own or of their type);
+        the chosen one hangs on the mouse like an imported model (on the mounting plate)."""
+        from katiecad.fileio import modell3d as MD
+        from katiecad.model import geraete3d as G3
+        app = self.app
+        p = getattr(app, "projekt", None)
+        if p is not None:
+            if not app._blatt_sichern():
+                return
+            infos, _idx = app._zeichnungsblaetter_einlesen()
+            if infos is None:
+                return
+            blaetter = [(k, b.elemente) for k, b in enumerate(infos)]
+            katalog = p.daten.get("bauteile", [])
+            symbole = p.daten.get("symbol_modelle", {})
+        else:
+            blaetter, katalog, symbole = [(0, app.elemente)], [], {}
+        zeilen = G3.geraete_mit_modell(blaetter, katalog, app.elemente, symbole)
+        dlg = GeraetePlatzierenDialog(app.root, zeilen)
+        app.root.wait_window(dlg)
+        z = dlg.result
+        if not z:
+            return
+        try:
+            modell = MD.laden(app.modell3d_pfad(z["modell"]))
+        except (MD.ModellFehler, OSError, ValueError) as ex:
+            messagebox.showerror(tr("d3.modell.titel"), str(ex), parent=app.root)
+            return
+        body = Koerper3D("netz", netzdaten=dict(modell["netz"], fang=modell.get("fang", [])),
+                         bez=z["ind"], geraet=z["ind"], **self._stil())
+        w, d, h = modell.get("masse", (0, 0, 0))
+        self._kopie_starten([body], ref=(0.0, 0.0, 0.0), ebene_y=self.montageplatte_y(),
+                            info=tr("d3.platz.info", ind=z["ind"], w="%g" % w, d="%g" % d, h="%g" % h))
+
+    def modell_importieren(self):
+        """3D > Import 3D model: STEP / STL / .katie3d -> simplified wireframe body that hangs
+        on the mouse; with a cabinet its back lies on the front of the mounting plate. The
+        conversion is cached in the folder 3D of the project."""
+        from katiecad.fileio import modell3d as MD
+        from tkinter import filedialog
+        pfad = filedialog.askopenfilename(
+            parent=self.app.root, title=tr("d3.modell.titel"),
+            filetypes=[(tr("d3.modell.typen"), "*.step *.stp *.STEP *.STP *.stl *.STL *.katie3d"),
+                       ("*.*", "*.*")])
+        if not pfad:
+            return
+        ext = os.path.splitext(pfad)[1].lower()
+        if ext in (".step", ".stp") and not MD.ocp_verfuegbar():
+            messagebox.showerror(tr("d3.modell.titel"), tr("d3.modell.ocp_fehlt"), parent=self.app.root)
+            return
+        if ext == ".katie3d":
+            einst = {"front": "+Z", "toleranz": 0.5, "ind": ""}
+        else:
+            p = getattr(self.app, "projekt", None)
+            vorgabe = None
+            if p is not None:
+                ordner = os.path.join(p.ordner, "3D")
+
+                def vorgabe(front):
+                    return MD.vorgabe_punkte(ordner, pfad, front)
+            dlg = ModellImportDialog(self.app.root, os.path.basename(pfad), ext in (".step", ".stp"),
+                                     vorgabe=vorgabe)
+            self.app.root.wait_window(dlg)
+            if not dlg.result:
+                return
+            einst = dlg.result
+        p = getattr(self.app, "projekt", None)
+        cache = None
+        if p is not None and ext != ".katie3d":
+            cache = MD.cache_pfad(os.path.join(p.ordner, "3D"), pfad, einst["front"])
+        self.app.root.config(cursor="watch")
+        self.app.root.update_idletasks()
+        try:
+            modell = MD.laden_oder_importieren(pfad, cache, einst["front"], einst["toleranz"],
+                                               einst.get("punkte"))
+        except MD.PunkteFehler as ex:
+            messagebox.showerror(tr("d3.modell.titel"), tr("d3.modell.punkte_fehler", p=str(ex)),
+                                 parent=self.app.root)
+            return
+        except (MD.ModellFehler, OSError, ValueError) as ex:
+            messagebox.showerror(tr("d3.modell.titel"), str(ex), parent=self.app.root)
+            return
+        finally:
+            self.app.root.config(cursor="")
+        netz = dict(modell["netz"], fang=modell.get("fang", []))
+        body = Koerper3D("netz", netzdaten=netz, bez=einst["ind"] or modell.get("quelle", ""),
+                         geraet=einst["ind"], **self._stil())
+        w, d, h = modell.get("masse", (0, 0, 0))
+        y_platte = self.montageplatte_y()
+        self._kopie_starten([body], ref=(0.0, 0.0, 0.0), ebene_y=y_platte,
+                            info=tr("d3.modell.platzieren", w="%g" % w, d="%g" % d, h="%g" % h))
 
     def _kopie_bilden(self, pl, pos):
         """Moved copies of the template objects, base corner at `pos`."""
@@ -2540,6 +2944,12 @@ class Ansicht3DMixin:
             w.extrudieren_dialog()
         elif cmd == "loch":
             w.loch_dialog()
+        elif cmd == "mechanik":
+            w.modus_setzen("mechanik")
+        elif cmd == "modell":
+            w.modell_importieren()
+        elif cmd == "platzieren":
+            w.geraete_platzieren()
         elif cmd == "block":
             w.block_bilden()
         elif cmd == "aufloesen":

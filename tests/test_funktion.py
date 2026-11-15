@@ -111,12 +111,18 @@ def modul(name, x, y, ind):
 di = modul("PLC DI 8", 100, 100, "-A1")
 check(DS.sps_art(di) == "DI", "Symbol traegt SPS=DI")
 check(len(DS.kanaele(di)) == 8, "8 Kanaele (ohne Versorgungspin)")
-check("VP1_SYM" in di.attribute and "STATION" in di.attribute and "PLATZ" in di.attribute, "Zusatzfelder als Attribute")
+# the symbol's own layout: first channel pin (I0.0) and its position, whatever the drawing
+k0 = [p for p in DS.kanaele(di) if p.wert == "I0.0"][0]
+check(k0.tag + "_SYM" in di.attribute and k0.tag + "_KOM" in di.attribute and "STATION" in di.attribute
+      and "PLATZ" in di.attribute, "Zusatzfelder als Attribute")
+check(not any(p.wert in ("M", "1M", "L+") for p in DS.kanaele(di)), "Versorgung ist kein Kanal")
 cpu = modul("PLC CPU", 20, 100, "-A0")
-check(DS.sps_art(cpu) == "CPU" and "VP1_SYM" not in cpu.attribute, "CPU ohne Kanalfelder")
-di.attribute.update({"STATION": "SPS1", "PLATZ": "4", "VP1_SYM": "S_Start", "VP1_KOM": "Taster Start"})
-taster = geraet(100, 130, "S1", "Taster")
-w = core.Leitung(100, 107.5, 100, 125)
+check(DS.sps_art(cpu) == "CPU" and not any(t.endswith("_SYM") for t in cpu.attribute), "CPU ohne Kanalfelder")
+di.attribute.update({"STATION": "SPS1", "PLATZ": "4", k0.tag + "_SYM": "S_Start",
+                     k0.tag + "_KOM": "Taster Start"})
+px, py = 100 + k0.x, 100 + k0.y
+taster = geraet(px, py + 22.5, "S1", "Taster")
+w = core.Leitung(px, py, px, py + 17.5)
 bl2 = [(0, [core.Koordinatenfeld(0, 0, 287, 164, 6, 4), di, cpu, taster, w])]
 L.leitungen_automatisch(bl2[0][1])
 n2 = N.Netz.aufbauen(bl2)

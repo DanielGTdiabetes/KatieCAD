@@ -146,6 +146,44 @@
           270
         ],
         "radius": 0.5
+      },
+      {
+        "typ": "attdef",
+        "layer": "0",
+        "farbe": "#c29bff",
+        "linientyp": "Volllinie (schmal)",
+        "eig_farbe": true,
+        "staerke": null,
+        "x": -5.0,
+        "y": 8.0,
+        "inhalt": "<SPS>",
+        "hoehe": 2.0,
+        "winkel": 0.0,
+        "schriftart": "Arial",
+        "einfuegepunkt": "unten_links",
+        "tag": "SPS",
+        "prompt": "SPS",
+        "wert": "CPU",
+        "sichtbar": false
+      },
+      {
+        "typ": "attdef",
+        "layer": "0",
+        "farbe": "#c29bff",
+        "linientyp": "Volllinie (schmal)",
+        "eig_farbe": true,
+        "staerke": null,
+        "x": -5.0,
+        "y": 8.0,
+        "inhalt": "<STATION>",
+        "hoehe": 2.0,
+        "winkel": 0.0,
+        "schriftart": "Arial",
+        "einfuegepunkt": "unten_links",
+        "tag": "STATION",
+        "prompt": "Steuerung / Station",
+        "wert": "",
+        "sichtbar": false
       }
     ]
   }

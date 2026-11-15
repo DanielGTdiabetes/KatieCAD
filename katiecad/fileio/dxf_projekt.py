@@ -178,6 +178,8 @@ def dxf_projekt_schreiben(doc, seiten, spalten=4, abstand=50.0):
     msp = doc.modelspace()
     if not seiten:
         return
+    from katiecad.fileio import dxf_linientypen as DLT
+    lt_namen = DLT.definieren(doc)
     zb = max(s.b for _n, s in seiten)
     zh = max(s.h for _n, s in seiten)
     pos = gitter_positionen(len(seiten), zb, zh, spalten, abstand)
@@ -199,6 +201,7 @@ def dxf_projekt_schreiben(doc, seiten, spalten=4, abstand=50.0):
                 _, pts, breite, farbe, dash, geschl = op
                 att = {"layer": layer, "lineweight": _lineweight(breite)}
                 att.update(_farbattribute(farbe))
+                att.update(DLT.attribute(DLT.schluessel_aus_dash(dash), lt_namen))
                 msp.add_lwpolyline([(x + ox, y + oy) for x, y in pts],
                                    close=bool(geschl), dxfattribs=att)
             elif k == "f":

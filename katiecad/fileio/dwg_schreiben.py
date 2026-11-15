@@ -90,8 +90,15 @@ def _farbe(e):
     return kw
 
 
+# linetype names defined in the DWG being written (see _Schreiber.linientypen)
+_LT_NAMEN = set()
+
+
 def _flaeche_kw(e):
     kw = {"layer": _a(e, "layer", "0")}
+    lt = _a(e, "linetype", None)
+    if isinstance(lt, str) and lt in _LT_NAMEN:
+        kw["linetype"] = lt
     kw.update(_farbe(e))
     return kw
 
@@ -242,6 +249,18 @@ class _Schreiber:
             self.b.geschrieben += 1
 
     # ---- tables ---------------------------------------------------------------
+    def linientypen(self):
+        """KatieCAD line types (dashed, dash-dot, dotted ...) as LTYPE table; the
+        entities reference them only if the table could be written."""
+        _LT_NAMEN.clear()
+        try:
+            from katiecad.fileio.dxf_linientypen import dwg_tabelle
+            tabelle = dwg_tabelle()
+            self.d.linetypes.update(tabelle)
+            _LT_NAMEN.update(tabelle)
+        except Exception as ex:
+            self.b.fehler.append(f"Linientypen: {ex}")
+
     def ebenen(self, doc):
         try:
             for l in doc.layers:
@@ -297,6 +316,7 @@ def dxf_doc_zu_dwg(doc, pfad, version="R2018"):
         try:
             drawing = ezdwg.new(v) if v != "AC1015" else ezdwg.new()
             s = _Schreiber(drawing, bericht, v)
+            s.linientypen()
             s.ebenen(doc)
             s.bloecke(doc)
             raum = drawing.modelspace()

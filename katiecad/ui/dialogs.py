@@ -21,6 +21,7 @@ from katiecad.common.i18n import tr, SPRACHE
 from katiecad.electrical import suchen as SU
 from katiecad.model.core import (
     FARBEN, ZEICHNUNGSFORMATE, LINIENTYPEN, LINIENSTAERKEN,
+    linientyp_text, linientyp_schluessel, linientypen_texte,
     SCHRIFTARTEN, MASSSTAEBE, BEM_RICHTUNGEN,
     schrift_fett, schrift_name, schrift_setzen,
     Layer, Text, Linie, Kreis, Bogen, Rechteck, Polylinie,
@@ -475,10 +476,13 @@ class KanalDialog(tk.Toplevel):
     SCHR = ("", "schraeg", "kreuz", "voll")
 
     def __init__(self, parent, breite=60.0, hoehe=40.0, mit_hoehe=False, laenge=None, titel=None,
-                 ausrichtung=None, schraffur="", schraffur_abstand=20.0, nur_schraffur=False):
+                 ausrichtung=None, schraffur="", schraffur_abstand=20.0, nur_schraffur=False,
+                 katalog=None, ref="", max_laenge=None):
         super().__init__(parent)
         self.result = None
         self._hoehe0 = hoehe
+        self._katalog = list((katalog or {}).get("kanaele", []))
+        self._ref = ref
         self.title(titel or tr("dlg.kanal.titel_vorgabe"))
         self.transient(parent)
         _modal(self)
@@ -486,6 +490,23 @@ class KanalDialog(tk.Toplevel):
         f = ttk.Frame(self, padding=14)
         f.pack(fill=tk.BOTH, expand=True)
         zustand = "disabled" if nur_schraffur else "normal"
+        self.kat_var = tk.StringVar(value=katalog_name(self._katalog, breite, hoehe, ref)
+                                    or tr("dlg.kanal.frei"))
+        if self._katalog and not nur_schraffur:
+            kf = ttk.Frame(f)
+            kf.grid(row=8, column=0, columnspan=2, sticky=tk.W, pady=(0, 6))
+            ttk.Label(kf, text=tr("dlg.kanal.katalog")).pack(side=tk.LEFT)
+            cb = ttk.Combobox(kf, textvariable=self.kat_var, state="readonly", width=28,
+                              values=[tr("dlg.kanal.frei")] + [k["name"] for k in self._katalog])
+            cb.pack(side=tk.LEFT, padx=8)
+            cb.bind("<<ComboboxSelected>>", lambda ev: self._katalog_gewaehlt())
+        self.max_var = tk.StringVar(value="" if max_laenge is None else f"{max_laenge:g}")
+        if max_laenge is not None and not nur_schraffur:
+            mf = ttk.Frame(f)
+            mf.grid(row=9, column=0, columnspan=2, sticky=tk.W, pady=(0, 6))
+            ttk.Label(mf, text=tr("dlg.kanal.max_laenge")).pack(side=tk.LEFT)
+            ttk.Entry(mf, textvariable=self.max_var, width=8).pack(side=tk.LEFT, padx=8)
+            ttk.Label(mf, text="mm").pack(side=tk.LEFT)
         ttk.Label(f, text=tr("dlg.kanal.breite")).grid(row=0, column=0, sticky=tk.W, pady=4)
         self.breite_var = tk.StringVar(value=f"{breite:g}")
         e = ttk.Entry(f, textvariable=self.breite_var, width=10, state=zustand)
@@ -520,12 +541,19 @@ class KanalDialog(tk.Toplevel):
         ttk.Label(f, text=tr("dlg.kanal.hinweis"), style="Hint.TLabel", wraplength=380,
                   justify=tk.LEFT).grid(row=6, column=0, columnspan=2, sticky=tk.W, pady=(8, 2))
         bf = ttk.Frame(f)
-        bf.grid(row=7, column=0, columnspan=2, pady=(10, 0))
+        bf.grid(row=10, column=0, columnspan=2, pady=(10, 0))
         ttk.Button(bf, text=tr("dlg.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
         ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
         self.bind("<Return>", lambda ev: self._ok())
         self.bind("<Escape>", lambda ev: self.destroy())
+        _zentrieren(self, parent)
         self.wait_window(self)
+
+    def _katalog_gewaehlt(self):
+        k = next((k for k in self._katalog if k["name"] == self.kat_var.get()), None)
+        if k is not None:
+            self.breite_var.set(f"{k['breite']:g}")
+            self.hoehe_var.set(f"{k['hoehe']:g}")
 
     def _ok(self):
         b = _zahl(self.breite_var, 0.0, True)
@@ -538,9 +566,30 @@ class KanalDialog(tk.Toplevel):
         ausr = next((a for a in self.AUSR if tr("dlg.kanal.ausr." + a) == wahl), "mitte")
         sw = self.schr_var.get()
         schr = next((a for a in self.SCHR if tr("dlg.wand.schr." + (a or "keine")) == sw), "")
+        k = next((k for k in self._katalog if k["name"] == self.kat_var.get()), None)
+        # a catalogue entry only counts while its size is unchanged
+        ref = (k["ref"] if k is not None and abs(k["breite"] - b) < 1e-6
+               and abs(k["hoehe"] - h) < 1e-6 else ("" if k is not None else self._ref))
+        try:
+            m = float(self.max_var.get().replace(",", ".")) if self.max_var.get().strip() else None
+        except ValueError:
+            m = None
         self.result = {"breite": b, "hoehe": h, "ausrichtung": ausr, "schraffur": schr,
-                       "schraffur_abstand": abst}
+                       "schraffur_abstand": abst, "ref": ref,
+                       "max_laenge": m if (m is not None and m > 0) else None}
         self.destroy()
+
+
+def katalog_name(katalog, breite, hoehe, ref=""):
+    """Catalogue entry shown for a duct: same reference, else same size; '' = free size."""
+    if ref:
+        for k in katalog:
+            if k["ref"] == ref:
+                return k["name"]
+    for k in katalog:
+        if abs(k["breite"] - breite) < 1e-6 and abs(k["hoehe"] - hoehe) < 1e-6:
+            return k["name"]
+    return ""
 
 
 class OeffnungDialog(tk.Toplevel):
@@ -748,9 +797,9 @@ class PropertiesDialog(tk.Toplevel):
         row += 1
         ttk.Label(f, text=tr("dlg.prop.linientyp")).grid(row=row, column=0,
                                                          sticky=tk.W, pady=4)
-        self.linientyp_var = tk.StringVar(value=element.linientyp)
+        self.linientyp_var = tk.StringVar(value=linientyp_text(element.linientyp))
         ttk.Combobox(f, textvariable=self.linientyp_var,
-                     values=list(LINIENTYPEN.keys()),
+                     values=linientypen_texte(),
                      width=20, state="readonly").grid(row=row, column=1,
                                                        sticky=tk.W, pady=4)
         row += 1
@@ -1026,7 +1075,7 @@ class PropertiesDialog(tk.Toplevel):
         try:
             el.layer = self.layer_var.get()
             el.farbe = self.farbe_var.get()
-            el.linientyp = self.linientyp_var.get()
+            el.linientyp = linientyp_schluessel(self.linientyp_var.get())
             el.eig_farbe = bool(self.eig_farbe_var.get())
             try:
                 el.staerke = float(str(self.staerke_var.get()).replace(",", "."))
@@ -2426,7 +2475,7 @@ class EigenschaftenPalette(tk.Toplevel):
             v = tk.StringVar()
             self._vars[feld] = v
             vals = (lambda: list(app.layers.keys())) if feld == "layer" \
-                else (lambda: list(LINIENTYPEN.keys()))
+                else linientypen_texte
             cb = ttk.Combobox(f, textvariable=v, width=24, values=vals())
             cb.configure(postcommand=lambda c=cb, fn=vals: c.configure(values=fn()))
             cb.bind("<<ComboboxSelected>>", lambda e, k=feld: self._anwenden(k))
@@ -2524,6 +2573,8 @@ class EigenschaftenPalette(tk.Toplevel):
                 txt = tr("dlg.eig.vonlayer") if feld in ("farbe", "staerke") else ""
             elif feld == "endstueck":
                 txt = tr("dlg.eig.end." + str(val))
+            elif feld == "linientyp":
+                txt = linientyp_text(val)
             elif isinstance(val, float):
                 txt = ("%g" % val)
             else:
@@ -2550,6 +2601,8 @@ class EigenschaftenPalette(tk.Toplevel):
                 return
             if feld == "endstueck":
                 wert = "strich" if wert == tr("dlg.eig.end.strich") else "pfeil"
+            if feld == "linientyp":
+                wert = linientyp_schluessel(wert)
             if feld in ("hoehe", "winkel", "staerke", "pfeil"):
                 if feld == "staerke" and wert in ("", tr("dlg.eig.vonlayer")):
                     wert = None
@@ -2725,6 +2778,671 @@ class ListenAuswahlDialog(tk.Toplevel):
         self.destroy()
 
 
+class ModellZielDialog(tk.Toplevel):
+    """Assign 3D model: to whom - the selected devices, all devices of their type (parts
+    catalogue) or all devices with their symbol (project table). typen / symbole: names
+    shown (an empty list disables the option). result: 'geraet' | 'artikel' | 'symbol' | None."""
+
+    def __init__(self, parent, n, typen, symbole):
+        super().__init__(parent)
+        self.result = None
+        self.title(tr("menu.elektro.modell3d"))
+        self.transient(parent)
+        _modal(self)
+        self.configure(bg=FARBEN["bg_mittel"])
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=tr("dlg.modellziel.frage"), style="Title.TLabel").pack(anchor=tk.W)
+        self._var = tk.StringVar(value="geraet")
+        ttk.Radiobutton(f, text=tr("dlg.modellziel.geraet", n=n), value="geraet",
+                        variable=self._var).pack(anchor=tk.W, pady=(8, 1))
+        for wert, namen in (("artikel", typen), ("symbol", symbole)):
+            text = tr("dlg.modellziel." + wert, namen=", ".join(namen) if namen else "-")
+            ttk.Radiobutton(f, text=text, value=wert, variable=self._var,
+                            state=tk.NORMAL if namen else tk.DISABLED).pack(anchor=tk.W, pady=1)
+        ttk.Label(f, text=tr("dlg.modellziel.hinweis"), style="Hint.TLabel", wraplength=380
+                  ).pack(anchor=tk.W, pady=(8, 0))
+        bf = ttk.Frame(f)
+        bf.pack(pady=(12, 0))
+        ttk.Button(bf, text=tr("dlg.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
+        self.bind("<Return>", lambda e: self._ok())
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.wait_window(self)
+
+    def _ok(self):
+        self.result = self._var.get()
+        self.destroy()
+
+
+class MPrintDialog(tk.Toplevel):
+    """Marker export for label printers (Weidmüller M-Print PRO).
+    einst: settings (reports.mprint.einstellungen), anzahl: {kind: number of markers}.
+    result: settings dict of the same shape, or None."""
+    ARTEN = ("hilos", "bornes", "equipos")
+
+    def __init__(self, parent, einst, anzahl):
+        super().__init__(parent)
+        self.result = None
+        self.title(tr("dlg.mp.titel"))
+        self.transient(parent)
+        _modal(self)
+        self.configure(bg=FARBEN["bg_mittel"])
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=tr("dlg.mp.titel"), style="Title.TLabel").grid(
+            row=0, column=0, columnspan=4, sticky=tk.W)
+        for c, t in ((1, "dlg.mp.format"), (2, "dlg.mp.max")):
+            ttk.Label(f, text=tr(t)).grid(row=1, column=c, sticky=tk.W, padx=(6, 0), pady=(8, 2))
+        self._v = {}
+        for i, art in enumerate(self.ARTEN, start=2):
+            e = einst[art]
+            akt = tk.BooleanVar(value=bool(e["aktiv"]))
+            fmt = tk.StringVar(value=str(e["format"]))
+            mx = tk.StringVar(value=str(e["max"]))
+            ttk.Checkbutton(f, text="%s  (%d)" % (tr("mp." + art), anzahl.get(art, 0)),
+                            variable=akt).grid(row=i, column=0, sticky=tk.W, pady=2)
+            ttk.Entry(f, textvariable=fmt, width=18).grid(row=i, column=1, sticky=tk.W,
+                                                          padx=(6, 0), pady=2)
+            ttk.Spinbox(f, from_=0, to=99, textvariable=mx, width=5).grid(
+                row=i, column=2, sticky=tk.W, padx=(6, 0), pady=2)
+            ttk.Label(f, text=tr("dlg.mp.hilfe." + art), style="Hint.TLabel").grid(
+                row=i, column=3, sticky=tk.W, padx=(8, 0))
+            self._v[art] = (akt, fmt, mx)
+        self._csv = tk.BooleanVar(value=bool(einst.get("csv")))
+        af = ttk.Frame(f)
+        af.grid(row=6, column=0, columnspan=4, sticky=tk.W, pady=(10, 0))
+        ttk.Radiobutton(af, text=tr("dlg.mp.excel"), variable=self._csv,
+                        value=False).pack(side=tk.LEFT, padx=(0, 14))
+        ttk.Radiobutton(af, text=tr("dlg.mp.csv"), variable=self._csv,
+                        value=True).pack(side=tk.LEFT)
+        self._kopf = tk.BooleanVar(value=bool(einst.get("kopf")))
+        ttk.Checkbutton(f, text=tr("dlg.mp.kopf"), variable=self._kopf).grid(
+            row=7, column=0, columnspan=4, sticky=tk.W, pady=(6, 0))
+        ttk.Label(f, text=tr("dlg.mp.hinweis"), style="Hint.TLabel", wraplength=460,
+                  justify=tk.LEFT).grid(row=8, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
+        bf = ttk.Frame(f)
+        bf.grid(row=9, column=0, columnspan=4, pady=(12, 0))
+        ttk.Button(bf, text=tr("dlg.mp.exportieren"), command=self._ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
+        self.bind("<Escape>", lambda e: self.destroy())
+        _zentrieren(self, parent)
+        self.wait_window(self)
+
+    def _ok(self):
+        self.result = mprint_ergebnis(
+            self._csv.get(), self._kopf.get(),
+            {art: (akt.get(), fmt.get(), mx.get()) for art, (akt, fmt, mx) in self._v.items()})
+        self.destroy()
+
+
+def mprint_ergebnis(csv, kopf, felder):
+    """Settings dict of the M-Print dialog: felder = {kind: (active, format, max text)}."""
+    out = {"csv": bool(csv), "kopf": bool(kopf)}
+    for art, (akt, fmt, mx) in felder.items():
+        try:
+            m = max(0, int(str(mx).strip()))
+        except ValueError:
+            m = 0
+        out[art] = {"aktiv": bool(akt), "format": str(fmt).strip(), "max": m}
+    return out
+
+
+class VersatzDialog(tk.Toplevel):
+    """Move by an exact offset: ΔX, ΔY, ΔZ (in the drawing unit) and optionally
+    copies (each one offset again). mit_z: ΔZ can be entered (3D objects selected).
+    result: {"dx", "dy", "dz", "kopien"} (kopien 0 = move) or None."""
+
+    def __init__(self, parent, einheit, vorgabe=None, mit_z=True, anzahl=0):
+        super().__init__(parent)
+        self.result = None
+        v = vorgabe or {}
+        self.title(tr("dlg.versatz.titel"))
+        self.transient(parent)
+        _modal(self)
+        self.configure(bg=FARBEN["bg_mittel"])
+        self.resizable(False, False)
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=tr("dlg.versatz.auswahl", n=anzahl), style="Title.TLabel").grid(
+            row=0, column=0, columnspan=3, sticky=tk.W)
+        self._v = {}
+        for i, k in enumerate(("dx", "dy", "dz"), start=1):
+            ttk.Label(f, text=tr("dlg.versatz." + k)).grid(row=i, column=0, sticky=tk.W,
+                                                           pady=3, padx=(0, 8))
+            var = tk.StringVar(value=zahl_text(v.get(k, 0.0)))
+            e = ttk.Entry(f, textvariable=var, width=12)
+            e.grid(row=i, column=1, sticky=tk.W, pady=3)
+            ttk.Label(f, text=einheit).grid(row=i, column=2, sticky=tk.W, padx=(6, 0))
+            if k == "dz" and not mit_z:
+                e.state(["disabled"])
+                var.set("0")
+            self._v[k] = var
+            if i == 1:
+                e.focus_set()
+                e.select_range(0, tk.END)
+        self._kopie = tk.BooleanVar(value=bool(v.get("kopien")))
+        self._n = tk.StringVar(value=str(max(1, int(v.get("kopien") or 1))))
+        kf = ttk.Frame(f)
+        kf.grid(row=4, column=0, columnspan=3, sticky=tk.W, pady=(8, 0))
+        ttk.Checkbutton(kf, text=tr("dlg.versatz.kopieren"), variable=self._kopie).pack(side=tk.LEFT)
+        ttk.Spinbox(kf, from_=1, to=999, textvariable=self._n, width=5).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Label(f, text=tr("dlg.versatz.hinweis" if mit_z else "dlg.versatz.hinweis_2d"),
+                  style="Hint.TLabel", wraplength=320, justify=tk.LEFT).grid(
+            row=5, column=0, columnspan=3, sticky=tk.W, pady=(8, 0))
+        bf = ttk.Frame(f)
+        bf.grid(row=6, column=0, columnspan=3, pady=(12, 0))
+        ttk.Button(bf, text=tr("dlg.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
+        self.bind("<Return>", lambda e: self._ok())
+        self.bind("<Escape>", lambda e: self.destroy())
+        _zentrieren(self, parent)
+        self.wait_window(self)
+
+    def _ok(self):
+        erg = versatz_ergebnis({k: v.get() for k, v in self._v.items()},
+                               self._kopie.get(), self._n.get())
+        if erg is None:
+            messagebox.showerror(tr("dlg.versatz.titel"), tr("dlg.versatz.fehler"), parent=self)
+            return
+        self.result = erg
+        self.destroy()
+
+
+def zahl_text(x):
+    """0.5 -> '0.5', 10.0 -> '10'."""
+    return ("%g" % float(x)) if x else "0"
+
+
+def versatz_ergebnis(werte, kopie, n):
+    """Parses the offset dialog: werte {"dx","dy","dz": text}, decimal comma allowed.
+    -> {"dx", "dy", "dz", "kopien"} or None if a value is not a number."""
+    out = {}
+    for k in ("dx", "dy", "dz"):
+        t = str(werte.get(k, "") or "0").strip().replace(",", ".")
+        try:
+            out[k] = float(t)
+        except ValueError:
+            return None
+    try:
+        out["kopien"] = max(1, min(999, int(str(n).strip()))) if kopie else 0
+    except ValueError:
+        return None
+    return out
+
+
+class DrahtnummernDialog(tk.Toplevel):
+    """Options of the wire numbering. vorgabe: settings dict (see
+    electrical.drahtnummern.STANDARD). mehrere_blaetter: offer "whole project".
+    result: {"format", "sps", "potenzial", "hoehe", "neu", "projekt"} or None."""
+
+    def __init__(self, parent, vorgabe, mehrere_blaetter=False):
+        super().__init__(parent)
+        self.result = None
+        self.title(tr("dlg.draht.titel"))
+        self.transient(parent)
+        _modal(self)
+        self.configure(bg=FARBEN["bg_mittel"])
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=tr("dlg.draht.titel"), style="Title.TLabel").grid(
+            row=0, column=0, columnspan=2, sticky=tk.W)
+        ttk.Label(f, text=tr("dlg.draht.format")).grid(row=1, column=0, sticky=tk.W, pady=(8, 0))
+        self._fmt = tk.StringVar(value=str(vorgabe.get("format") or "{sheet}{n:02}"))
+        ttk.Entry(f, textvariable=self._fmt, width=22).grid(row=1, column=1, sticky=tk.W,
+                                                           padx=(6, 0), pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.draht.format_hilfe"), style="Hint.TLabel",
+                  wraplength=340, justify=tk.LEFT).grid(row=2, column=0, columnspan=2, sticky=tk.W)
+        ttk.Label(f, text=tr("dlg.draht.start")).grid(row=3, column=0, sticky=tk.W, pady=(8, 0))
+        self._start = tk.StringVar(value=str(vorgabe.get("start", 0)))
+        ttk.Spinbox(f, from_=0, to=999, textvariable=self._start, width=6).grid(
+            row=3, column=1, sticky=tk.W, padx=(6, 0), pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.draht.hoehe")).grid(row=4, column=0, sticky=tk.W, pady=(8, 0))
+        self._hoehe = tk.StringVar(value=str(vorgabe.get("hoehe", 2.5)))
+        ttk.Entry(f, textvariable=self._hoehe, width=8).grid(row=4, column=1, sticky=tk.W,
+                                                            padx=(6, 0), pady=(8, 0))
+        self._sps = tk.BooleanVar(value=bool(vorgabe.get("sps", True)))
+        ttk.Checkbutton(f, text=tr("dlg.draht.sps"), variable=self._sps).grid(
+            row=5, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+        self._pot = tk.BooleanVar(value=bool(vorgabe.get("potenzial", True)))
+        ttk.Checkbutton(f, text=tr("dlg.draht.potenzial"), variable=self._pot).grid(
+            row=6, column=0, columnspan=2, sticky=tk.W)
+        self._ast = tk.BooleanVar(value=bool(vorgabe.get("je_ast", True)))
+        ttk.Checkbutton(f, text=tr("dlg.draht.je_ast"), variable=self._ast).grid(
+            row=12, column=0, columnspan=2, sticky=tk.W, pady=(6, 0))
+        self._neu = tk.BooleanVar(value=False)
+        ttk.Radiobutton(f, text=tr("dlg.draht.nur_neue"), variable=self._neu,
+                        value=False).grid(row=7, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+        ttk.Radiobutton(f, text=tr("dlg.draht.alle_neu"), variable=self._neu,
+                        value=True).grid(row=8, column=0, columnspan=2, sticky=tk.W)
+        self._projekt = tk.BooleanVar(value=True)
+        if mehrere_blaetter:
+            ttk.Checkbutton(f, text=tr("dlg.draht.projekt"), variable=self._projekt).grid(
+                row=9, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.draht.hinweis"), style="Hint.TLabel", wraplength=340,
+                  justify=tk.LEFT).grid(row=10, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+        bf = ttk.Frame(f)
+        bf.grid(row=13, column=0, columnspan=2, pady=(12, 0))
+        ttk.Button(bf, text=tr("dlg.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
+        self.bind("<Return>", lambda e: self._ok())
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.wait_window(self)
+
+    def _ok(self):
+        from katiecad.electrical.drahtnummern import STANDARD, format_gueltig
+
+        try:
+            hoehe = float(self._hoehe.get().replace(",", "."))
+        except ValueError:
+            hoehe = 0.0
+        if hoehe <= 0:
+            messagebox.showerror(tr("dlg.draht.titel"), tr("dlg.draht.hoehe_fehler"), parent=self)
+            return
+        try:
+            start = max(0, int(self._start.get()))
+        except ValueError:
+            start = 0
+        fmt = self._fmt.get().strip() or STANDARD["format"]
+        if not format_gueltig(fmt, start):
+            messagebox.showerror(tr("dlg.draht.titel"), tr("dlg.draht.format_fehler"), parent=self)
+            return
+        self.result = {"format": fmt, "start": start,
+                       "sps": self._sps.get(), "potenzial": self._pot.get(),
+                       "je_ast": self._ast.get(),
+                       "hoehe": hoehe, "neu": self._neu.get(),
+                       "projekt": self._projekt.get()}
+        self.destroy()
+
+
+class UmbenennenDialog(tk.Toplevel):
+    """Rename devices with a counter (see electrical.umbenennen). vorgabe: settings dict;
+    bereiche: offered scopes from "auswahl" / "blatt" / "projekt"; vorschau(einst, bereich)
+    -> [(old, new)] for the preview. result: dict(settings, bereich=...) or None."""
+
+    def __init__(self, parent, vorgabe, bereiche, vorschau):
+        super().__init__(parent)
+        self.result = None
+        self._vorschau = vorschau
+        self.title(tr("dlg.umb.titel"))
+        self.transient(parent)
+        _modal(self)
+        self.configure(bg=FARBEN["bg_mittel"])
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=tr("dlg.umb.titel"), style="Title.TLabel").grid(
+            row=0, column=0, columnspan=4, sticky=tk.W)
+        ttk.Label(f, text=tr("dlg.umb.format")).grid(row=1, column=0, sticky=tk.W, pady=(8, 0))
+        self._fmt = tk.StringVar(value=str(vorgabe.get("format") or "{sheet}{kz}{n}"))
+        ttk.Entry(f, textvariable=self._fmt, width=22).grid(row=1, column=1, columnspan=3,
+                                                           sticky=tk.W, padx=(6, 0), pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.umb.format_hilfe"), style="Hint.TLabel", wraplength=420,
+                  justify=tk.LEFT).grid(row=2, column=0, columnspan=4, sticky=tk.W)
+        ttk.Label(f, text=tr("dlg.umb.start")).grid(row=3, column=0, sticky=tk.W, pady=(8, 0))
+        self._start = tk.StringVar(value=str(vorgabe.get("start", 1)))
+        ttk.Spinbox(f, from_=0, to=9999, textvariable=self._start, width=6).grid(
+            row=3, column=1, sticky=tk.W, padx=(6, 0), pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.umb.schritt")).grid(row=3, column=2, sticky=tk.W, padx=(12, 0),
+                                                      pady=(8, 0))
+        self._schritt = tk.StringVar(value=str(vorgabe.get("schritt", 1)))
+        ttk.Spinbox(f, from_=1, to=100, textvariable=self._schritt, width=5).grid(
+            row=3, column=3, sticky=tk.W, padx=(6, 0), pady=(8, 0))
+        self._je_blatt = tk.BooleanVar(value=bool(vorgabe.get("je_blatt", True)))
+        ttk.Checkbutton(f, text=tr("dlg.umb.je_blatt"), variable=self._je_blatt).grid(
+            row=4, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.umb.reihenfolge")).grid(row=5, column=0, sticky=tk.W, pady=(8, 0))
+        self._reihe = tk.StringVar(value=vorgabe.get("reihenfolge", "spalten"))
+        for i, w in enumerate(("spalten", "zeilen")):
+            ttk.Radiobutton(f, text=tr("dlg.umb." + w), variable=self._reihe, value=w).grid(
+                row=6 + i, column=0, columnspan=4, sticky=tk.W)
+        ttk.Label(f, text=tr("dlg.umb.bereich")).grid(row=8, column=0, sticky=tk.W, pady=(8, 0))
+        self._bereich = tk.StringVar(value=bereiche[0])
+        for i, w in enumerate(bereiche):
+            ttk.Radiobutton(f, text=tr("dlg.umb.b_" + w), variable=self._bereich, value=w).grid(
+                row=9 + i, column=0, columnspan=4, sticky=tk.W)
+        self.tree = ttk.Treeview(f, columns=("alt", "neu"), show="headings", height=8)
+        for c, b in (("alt", 150), ("neu", 150)):
+            self.tree.heading(c, text=tr("dlg.umb.col." + c))
+            self.tree.column(c, width=b, anchor=tk.W)
+        self.tree.grid(row=12, column=0, columnspan=4, sticky="nsew", pady=(10, 0))
+        self._info = tk.StringVar(value="")
+        ttk.Label(f, textvariable=self._info, style="Hint.TLabel", wraplength=420,
+                  justify=tk.LEFT).grid(row=13, column=0, columnspan=4, sticky=tk.W, pady=(4, 0))
+        ttk.Label(f, text=tr("dlg.umb.hinweis"), style="Hint.TLabel", wraplength=420,
+                  justify=tk.LEFT).grid(row=14, column=0, columnspan=4, sticky=tk.W, pady=(6, 0))
+        bf = ttk.Frame(f)
+        bf.grid(row=15, column=0, columnspan=4, pady=(12, 0))
+        ttk.Button(bf, text=tr("dlg.umb.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
+        for v in (self._fmt, self._start, self._schritt, self._je_blatt, self._reihe, self._bereich):
+            v.trace_add("write", lambda *a: self._aktualisieren())
+        self._aktualisieren()
+        self.bind("<Return>", lambda e: self._ok())
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.wait_window(self)
+
+    def _einst(self):
+        try:
+            start = max(0, int(self._start.get()))
+            schritt = max(1, int(self._schritt.get()))
+        except ValueError:
+            return None
+        return {"format": self._fmt.get().strip(), "start": start, "schritt": schritt,
+                "je_blatt": self._je_blatt.get(), "reihenfolge": self._reihe.get()}
+
+    def _aktualisieren(self):
+        from katiecad.electrical.umbenennen import format_gueltig
+        self.tree.delete(*self.tree.get_children())
+        e = self._einst()
+        if e is None or not format_gueltig(e["format"]):
+            self._info.set(tr("dlg.umb.format_fehler"))
+            return
+        zeilen = self._vorschau(e, self._bereich.get())
+        for alt, neu in zeilen[:500]:
+            self.tree.insert("", tk.END, values=(alt, neu))
+        geaendert = sum(1 for a, n in zeilen if a != n)
+        self._info.set(tr("dlg.umb.anzahl", n=len(zeilen), g=geaendert))
+
+    def _ok(self):
+        from katiecad.electrical.umbenennen import format_gueltig
+        e = self._einst()
+        if e is None or not format_gueltig(e["format"]):
+            messagebox.showerror(tr("dlg.umb.titel"), tr("dlg.umb.format_fehler"), parent=self)
+            return
+        self.result = dict(e, bereich=self._bereich.get())
+        self.destroy()
+
+
+class KlemmenNummernDialog(tk.Toplevel):
+    """Renumber terminal strips (see electrical.klemmen_nummern). leisten: [(strip, number
+    of terminals)]; gewaehlt: strips preselected; vorschau(einst, strips) -> [(strip, old,
+    new)]. result: dict(settings, leisten=[...]) or None."""
+
+    def __init__(self, parent, vorgabe, leisten, gewaehlt, vorschau):
+        super().__init__(parent)
+        self.result = None
+        self._vorschau = vorschau
+        self._namen = [n for n, _z in leisten]
+        self.title(tr("dlg.kln.titel"))
+        self.transient(parent)
+        _modal(self)
+        self.configure(bg=FARBEN["bg_mittel"])
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=tr("dlg.kln.titel"), style="Title.TLabel").grid(
+            row=0, column=0, columnspan=4, sticky=tk.W)
+        ttk.Label(f, text=tr("dlg.kln.leisten")).grid(row=1, column=0, columnspan=4, sticky=tk.W,
+                                                      pady=(8, 2))
+        self.liste = tk.Listbox(f, selectmode=tk.EXTENDED, height=min(8, max(3, len(leisten))),
+                                exportselection=False)
+        for i, (n, z) in enumerate(leisten):
+            self.liste.insert(tk.END, tr("dlg.kln.leiste_zeile", leiste=n, n=z))
+            if n in gewaehlt:
+                self.liste.selection_set(i)
+        self.liste.grid(row=2, column=0, columnspan=4, sticky="ew")
+        self.liste.bind("<<ListboxSelect>>", lambda e: self._aktualisieren())
+        ttk.Label(f, text=tr("dlg.kln.format")).grid(row=3, column=0, sticky=tk.W, pady=(8, 0))
+        self._fmt = tk.StringVar(value=str(vorgabe.get("format") or "{n}"))
+        ttk.Entry(f, textvariable=self._fmt, width=10).grid(row=3, column=1, sticky=tk.W,
+                                                           padx=(6, 0), pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.kln.format_hilfe"), style="Hint.TLabel", wraplength=420,
+                  justify=tk.LEFT).grid(row=4, column=0, columnspan=4, sticky=tk.W)
+        ttk.Label(f, text=tr("dlg.umb.start")).grid(row=5, column=0, sticky=tk.W, pady=(8, 0))
+        self._start = tk.StringVar(value=str(vorgabe.get("start", 1)))
+        ttk.Spinbox(f, from_=0, to=9999, textvariable=self._start, width=6).grid(
+            row=5, column=1, sticky=tk.W, padx=(6, 0), pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.umb.schritt")).grid(row=5, column=2, sticky=tk.W, padx=(12, 0),
+                                                      pady=(8, 0))
+        self._schritt = tk.StringVar(value=str(vorgabe.get("schritt", 1)))
+        ttk.Spinbox(f, from_=1, to=100, textvariable=self._schritt, width=5).grid(
+            row=5, column=3, sticky=tk.W, padx=(6, 0), pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.kln.reihenfolge")).grid(row=6, column=0, columnspan=4,
+                                                          sticky=tk.W, pady=(8, 0))
+        self._reihe = tk.StringVar(value=vorgabe.get("reihenfolge", "spalten"))
+        for i, w in enumerate(("spalten", "zeilen", "bestehend")):
+            ttk.Radiobutton(f, text=tr("dlg.kln." + w), variable=self._reihe, value=w).grid(
+                row=7 + i, column=0, columnspan=4, sticky=tk.W)
+        self._buchst = tk.BooleanVar(value=bool(vorgabe.get("buchstaben_behalten", True)))
+        ttk.Checkbutton(f, text=tr("dlg.kln.buchstaben"), variable=self._buchst).grid(
+            row=10, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
+        self.tree = ttk.Treeview(f, columns=("leiste", "alt", "neu"), show="headings", height=8)
+        for c, b in (("leiste", 90), ("alt", 110), ("neu", 110)):
+            self.tree.heading(c, text=tr("dlg.kln.col." + c))
+            self.tree.column(c, width=b, anchor=tk.W)
+        self.tree.grid(row=11, column=0, columnspan=4, sticky="nsew", pady=(10, 0))
+        self._info = tk.StringVar(value="")
+        ttk.Label(f, textvariable=self._info, style="Hint.TLabel", wraplength=420,
+                  justify=tk.LEFT).grid(row=12, column=0, columnspan=4, sticky=tk.W, pady=(4, 0))
+        ttk.Label(f, text=tr("dlg.kln.hinweis"), style="Hint.TLabel", wraplength=420,
+                  justify=tk.LEFT).grid(row=13, column=0, columnspan=4, sticky=tk.W, pady=(6, 0))
+        bf = ttk.Frame(f)
+        bf.grid(row=14, column=0, columnspan=4, pady=(12, 0))
+        ttk.Button(bf, text=tr("dlg.kln.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
+        for v in (self._fmt, self._start, self._schritt, self._reihe, self._buchst):
+            v.trace_add("write", lambda *a: self._aktualisieren())
+        self._aktualisieren()
+        self.bind("<Return>", lambda e: self._ok())
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.wait_window(self)
+
+    def _gewaehlt(self):
+        return [self._namen[i] for i in self.liste.curselection()]
+
+    def _einst(self):
+        try:
+            start = max(0, int(self._start.get()))
+            schritt = max(1, int(self._schritt.get()))
+        except ValueError:
+            return None
+        return {"format": self._fmt.get().strip(), "start": start, "schritt": schritt,
+                "reihenfolge": self._reihe.get(), "buchstaben_behalten": self._buchst.get()}
+
+    def _aktualisieren(self):
+        from katiecad.electrical.klemmen_nummern import format_gueltig
+        self.tree.delete(*self.tree.get_children())
+        e = self._einst()
+        if e is None or not format_gueltig(e["format"]):
+            self._info.set(tr("dlg.kln.format_fehler"))
+            return
+        zeilen = self._vorschau(e, self._gewaehlt())
+        for z in zeilen[:1000]:
+            self.tree.insert("", tk.END, values=z)
+        self._info.set(tr("dlg.kln.anzahl", n=len(zeilen), g=sum(1 for z in zeilen if z[1] != z[2])))
+
+    def _ok(self):
+        from katiecad.electrical.klemmen_nummern import format_gueltig
+        e = self._einst()
+        if e is None or not format_gueltig(e["format"]):
+            messagebox.showerror(tr("dlg.kln.titel"), tr("dlg.kln.format_fehler"), parent=self)
+            return
+        if not self._gewaehlt():
+            messagebox.showerror(tr("dlg.kln.titel"), tr("dlg.kln.keine"), parent=self)
+            return
+        self.result = dict(e, leisten=self._gewaehlt())
+        self.destroy()
+
+
+class KlemmenleisteDialog(tk.Toplevel):
+    """Terminal strip editor (see electrical.klemmenleiste): one row per terminal in mounting
+    order; edit number, type, manufacturer, function, jumper to the next terminal and the
+    partition plate, move rows, renumber in table order. leisten: strip names; start: the
+    strip shown first; laden(strip) -> rows. result: {strip: rows} of the edited strips or None."""
+
+    SPALTEN = (("pos", 36), ("num", 60), ("typ", 110), ("man", 90), ("per", 90),
+               ("oben", 150), ("unten", 150), ("bruecke", 80), ("trenn", 70))
+
+    def __init__(self, parent, leisten, start, laden):
+        super().__init__(parent)
+        self.result = None
+        self._laden = laden
+        self._daten = {}
+        self.title(tr("dlg.kleiste.titel"))
+        self.transient(parent)
+        _modal(self)
+        self.configure(bg=FARBEN["bg_mittel"])
+        f = ttk.Frame(self, padding=12)
+        f.pack(fill=tk.BOTH, expand=True)
+        kopf = ttk.Frame(f)
+        kopf.pack(fill=tk.X)
+        ttk.Label(kopf, text=tr("dlg.kleiste.leiste")).pack(side=tk.LEFT)
+        self._leiste = tk.StringVar(value=start)
+        cb = ttk.Combobox(kopf, textvariable=self._leiste, values=list(leisten), state="readonly",
+                          width=14)
+        cb.pack(side=tk.LEFT, padx=6)
+        cb.bind("<<ComboboxSelected>>", lambda e: self._zeigen())
+        rahmen = ttk.Frame(f)
+        rahmen.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        self.tree = ttk.Treeview(rahmen, columns=[c for c, _b in self.SPALTEN], show="headings",
+                                 height=16, selectmode="extended")
+        for c, b in self.SPALTEN:
+            self.tree.heading(c, text=tr("dlg.kleiste.col." + c))
+            self.tree.column(c, width=b, anchor=tk.W, stretch=c in ("oben", "unten"))
+        sb = ttk.Scrollbar(rahmen, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        sb.pack(side=tk.LEFT, fill=tk.Y)
+        self.tree.bind("<<TreeviewSelect>>", lambda e: self._auswahl_laden())
+        # edit panel for the selected rows
+        ed = ttk.LabelFrame(f, text=tr("dlg.kleiste.bearbeiten"), padding=8)
+        ed.pack(fill=tk.X, pady=(8, 0))
+        self._v = {}
+        for i, k in enumerate(("num", "typ", "man", "per")):
+            ttk.Label(ed, text=tr("dlg.kleiste.col." + k)).grid(row=0, column=i, sticky=tk.W, padx=3)
+            v = tk.StringVar()
+            self._v[k] = v
+            ttk.Entry(ed, textvariable=v, width=12 if k == "num" else 16).grid(
+                row=1, column=i, sticky=tk.W, padx=3)
+        self._br_namen = {"": "-", "oben": tr("dlg.kleiste.br_oben"),
+                          "unten": tr("dlg.kleiste.br_unten"), "beide": tr("dlg.kleiste.br_beide")}
+        ttk.Label(ed, text=tr("dlg.kleiste.col.bruecke")).grid(row=0, column=4, sticky=tk.W, padx=3)
+        self._br = tk.StringVar(value="-")
+        ttk.Combobox(ed, textvariable=self._br, values=list(self._br_namen.values()),
+                     state="readonly", width=12).grid(row=1, column=4, sticky=tk.W, padx=3)
+        self._trenn = tk.BooleanVar(value=False)
+        ttk.Checkbutton(ed, text=tr("dlg.kleiste.col.trenn"), variable=self._trenn).grid(
+            row=1, column=5, sticky=tk.W, padx=6)
+        ttk.Button(ed, text=tr("dlg.kleiste.uebernehmen"), command=self._uebernehmen).grid(
+            row=1, column=6, sticky=tk.W, padx=6)
+        ttk.Label(ed, text=tr("dlg.kleiste.mehrfach"), style="Hint.TLabel", wraplength=700,
+                  justify=tk.LEFT).grid(row=2, column=0, columnspan=7, sticky=tk.W, pady=(4, 0))
+        # order buttons
+        bt = ttk.Frame(f)
+        bt.pack(fill=tk.X, pady=(8, 0))
+        ttk.Button(bt, text=tr("dlg.kleiste.hoch"), command=lambda: self._schieben(-1)).pack(
+            side=tk.LEFT, padx=(0, 4))
+        ttk.Button(bt, text=tr("dlg.kleiste.runter"), command=lambda: self._schieben(1)).pack(
+            side=tk.LEFT, padx=4)
+        ttk.Button(bt, text=tr("dlg.kleiste.nummerieren"), command=self._nummerieren).pack(
+            side=tk.LEFT, padx=4)
+        ttk.Button(bt, text=tr("dlg.kleiste.sortieren"), command=self._sortieren).pack(
+            side=tk.LEFT, padx=4)
+        self._info = tk.StringVar(value="")
+        ttk.Label(f, textvariable=self._info, style="Hint.TLabel", wraplength=760,
+                  justify=tk.LEFT).pack(anchor=tk.W, pady=(6, 0))
+        ttk.Label(f, text=tr("dlg.kleiste.hinweis"), style="Hint.TLabel", wraplength=760,
+                  justify=tk.LEFT).pack(anchor=tk.W, pady=(4, 0))
+        bf = ttk.Frame(f)
+        bf.pack(pady=(10, 0))
+        ttk.Button(bf, text=tr("dlg.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
+        self.bind("<Escape>", lambda e: self.destroy())
+        self._zeigen()
+        self.wait_window(self)
+
+    # ---- data
+    def _rows(self):
+        n = self._leiste.get()
+        if n not in self._daten:
+            self._daten[n] = self._laden(n)
+        return self._daten[n]
+
+    def _zeigen(self, auswahl=()):
+        from katiecad.electrical.klemmenleiste import pruefen
+        rows = self._rows()
+        self.tree.delete(*self.tree.get_children())
+        for i, z in enumerate(rows):
+            num = z["num"] + ("  (x%d)" % z["anzahl"] if z.get("anzahl", 1) > 1 else "")
+            self.tree.insert("", tk.END, iid=str(i), values=(
+                i + 1, num, z["typ"], z["man"], z["per"], z.get("oben", ""), z.get("unten", ""),
+                self._br_namen.get(z.get("bruecke") or "", "-") if i < len(rows) - 1 else "",
+                "|" if z.get("trenn") else ""))
+        for i in auswahl:
+            if 0 <= i < len(rows):
+                self.tree.selection_add(str(i))
+        if auswahl:
+            self.tree.see(str(auswahl[0]))
+        fehler = pruefen(rows)
+        doppelt = [rows[i]["num"] for i, a in fehler if a == "doppelt"]
+        leer = sum(1 for _i, a in fehler if a == "leer")
+        teile = [tr("dlg.kleiste.anzahl", n=len(rows))]
+        if doppelt:
+            teile.append(tr("dlg.kleiste.doppelt", nums=", ".join(doppelt)))
+        if leer:
+            teile.append(tr("dlg.kleiste.leer", n=leer))
+        self._info.set("  ".join(teile))
+
+    def _gewaehlt(self):
+        return sorted(int(i) for i in self.tree.selection())
+
+    def _auswahl_laden(self):
+        sel = self._gewaehlt()
+        if not sel:
+            return
+        z = self._rows()[sel[0]]
+        for k in self._v:
+            self._v[k].set("" if (k == "num" and len(sel) > 1) else z.get(k, ""))
+        self._br.set(self._br_namen.get(z.get("bruecke") or "", "-"))
+        self._trenn.set(bool(z.get("trenn")))
+
+    def _uebernehmen(self):
+        sel = self._gewaehlt()
+        if not sel:
+            return
+        rows = self._rows()
+        rueck = {v: k for k, v in self._br_namen.items()}
+        for i in sel:
+            z = rows[i]
+            for k, v in self._v.items():
+                if k == "num" and len(sel) > 1:
+                    continue
+                if len(sel) > 1 and not v.get().strip():
+                    continue                     # several rows: an empty field changes nothing
+                z[k] = v.get().strip()
+            z["bruecke"] = rueck.get(self._br.get(), "")
+            z["trenn"] = bool(self._trenn.get())
+        self._zeigen(sel)
+
+    def _schieben(self, d):
+        sel = self._gewaehlt()
+        rows = self._rows()
+        if not sel or (d < 0 and sel[0] == 0) or (d > 0 and sel[-1] == len(rows) - 1):
+            return
+        for i in (sel if d < 0 else reversed(sel)):
+            rows[i + d], rows[i] = rows[i], rows[i + d]
+        self._zeigen([i + d for i in sel])
+
+    def _nummerieren(self):
+        from katiecad.electrical.klemmenleiste import umnummerieren
+        umnummerieren(self._rows())
+        self._zeigen(self._gewaehlt())
+
+    def _sortieren(self):
+        from katiecad.electrical.klemmenleiste import nach_nummer_sortiert
+        self._daten[self._leiste.get()] = nach_nummer_sortiert(self._rows())
+        self._zeigen()
+
+    def _ok(self):
+        from katiecad.electrical.klemmenleiste import pruefen
+        for n, rows in self._daten.items():
+            if any(a == "doppelt" for _i, a in pruefen(rows)):
+                if not messagebox.askyesno(tr("dlg.kleiste.titel"),
+                                           tr("dlg.kleiste.doppelt_frage", leiste=n), parent=self):
+                    return
+        self.result = dict(self._daten)
+        self.destroy()
+
+
 class SchriftenDialog(tk.Toplevel):
     """Font manager: choose installed fonts that show up in the font lists.
     result: list of the chosen font names or None."""
@@ -2825,7 +3543,9 @@ class DokumentationDialog(tk.Toplevel):
               "gezeichnet", "geprueft", "revision", "datum")
     STANDARD = ("deckblatt", "inhalt", "geraete", "klemmen", "kabel")
     TYPEN = STANDARD + ("verbindungen", "stueckliste", "querverweise",
-                        "potenziale", "stecker", "etiketten", "revisionen", "sps")
+                        "potenziale", "stecker", "etiketten", "revisionen", "sps",
+                        "kanaele", "mechanik", "leistenbild")
+    SEITEN_MODI = ("auto", "oben_intern", "unten_intern", "oben_unten")
 
     def __init__(self, parent, vorlagen, einst, daten, projektname,
                  vorlage_vorgabe=None):
@@ -2855,6 +3575,16 @@ class DokumentationDialog(tk.Toplevel):
         self.v_klg = tk.BooleanVar(value=bool(einst.get("klemmen_geraete", True)))
         ttk.Checkbutton(f, text=tr("dlg.doku.klemmen_geraete"),
                         variable=self.v_klg).pack(anchor=tk.W, padx=10, pady=(4, 0))
+        sf = ttk.Frame(f)
+        sf.pack(anchor=tk.W, padx=10, pady=(4, 0))
+        ttk.Label(sf, text=tr("dlg.doku.klemmen_seiten")).pack(side=tk.LEFT, padx=(0, 6))
+        self._seiten_namen = [tr("dlg.doku.seiten." + m) for m in self.SEITEN_MODI]
+        modus = einst.get("klemmen_seiten")
+        self.cb_seiten = ttk.Combobox(sf, values=self._seiten_namen, state="readonly",
+                                      width=38)
+        self.cb_seiten.current(self.SEITEN_MODI.index(modus)
+                               if modus in self.SEITEN_MODI else 0)
+        self.cb_seiten.pack(side=tk.LEFT)
 
         ttk.Label(f, text=tr("dlg.doku.daten"), style="Title.TLabel").pack(
             anchor=tk.W, pady=(12, 2))
@@ -2927,6 +3657,7 @@ class DokumentationDialog(tk.Toplevel):
             "daten": {k: v.get().strip() for k, v in self.v_f.items()},
             "vorlage": pfad,
             "klemmen_geraete": bool(self.v_klg.get()),
+            "klemmen_seiten": self.SEITEN_MODI[max(0, self.cb_seiten.current())],
             "einpolig_auswerten": bool(self.v_ep.get()),
             "format": self.v_format.get(),
             "schrift": self.v_schrift.get() or "Arial",
@@ -3531,6 +4262,155 @@ class KoordinatenfeldDialog(tk.Toplevel):
         self.destroy()
 
 
+class ToolbarKnopfDialog(tk.Toplevel):
+    """Show, hide and order buttons of a symbol toolbar."""
+
+    def __init__(self, parent, titel, eintraege, reihe, ausgeblendet):
+        super().__init__(parent)
+        self.result = None
+        self._namen = dict(eintraege)
+        self._reihe = list(reihe)
+        self._ausgeblendet = set(ausgeblendet)
+        self.title(tr("dlg.tbknopf.titel", name=titel))
+        self.transient(parent)
+        _modal(self)
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        liste = ttk.Frame(f)
+        liste.pack(fill=tk.BOTH, expand=True)
+        self.baum = ttk.Treeview(liste, columns=("name", "sichtbar"), show="headings",
+                                 height=min(12, len(eintraege)), selectmode="browse")
+        self.baum.heading("name", text=tr("dlg.tbknopf.knopf"))
+        self.baum.heading("sichtbar", text=tr("dlg.tbknopf.sichtbar"))
+        self.baum.column("name", width=300)
+        self.baum.column("sichtbar", width=80, stretch=False, anchor=tk.CENTER)
+        scroll = ttk.Scrollbar(liste, orient=tk.VERTICAL, command=self.baum.yview)
+        self.baum.configure(yscrollcommand=scroll.set)
+        self.baum.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.baum.bind("<Double-Button-1>", lambda e: self._umschalten(self.baum.identify_row(e.y)))
+        self.baum.bind("<space>", lambda _e: self._umschalten())
+        bf = ttk.Frame(f)
+        bf.pack(fill=tk.X, pady=(8, 6))
+        ttk.Button(bf, text=tr("dlg.tbknopf.umschalten"), command=self._umschalten).pack(side=tk.LEFT, padx=2)
+        ttk.Button(bf, text=tr("dlg.tbknopf.hoch"), command=lambda: self._verschieben(-1)).pack(side=tk.LEFT, padx=2)
+        ttk.Button(bf, text=tr("dlg.tbknopf.runter"), command=lambda: self._verschieben(1)).pack(side=tk.LEFT, padx=2)
+        unten = ttk.Frame(f)
+        unten.pack(fill=tk.X)
+        ttk.Button(unten, text=tr("dlg.tbknopf.standard"), command=self._standard).pack(side=tk.LEFT, padx=2)
+        ttk.Button(unten, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(unten, text=tr("dlg.ok"), command=self._ok).pack(side=tk.RIGHT, padx=2)
+        self.bind("<Escape>", lambda _e: self.destroy())
+        self._anzeigen()
+        _zentrieren(self, parent)
+        self.wait_window(self)
+
+    def _auswahl(self):
+        return next(iter(self.baum.selection()), None)
+
+    def _anzeigen(self, auswahl=None):
+        self.baum.delete(*self.baum.get_children())
+        for key in self._reihe:
+            sichtbar = tr("dlg.nein" if key in self._ausgeblendet else "dlg.ja")
+            self.baum.insert("", "end", iid=key, values=(self._namen[key], sichtbar))
+        key = auswahl or next(iter(self._reihe), None)
+        if key:
+            self.baum.selection_set(key)
+            self.baum.focus(key)
+            self.baum.see(key)
+
+    def _umschalten(self, key=None):
+        key = self._auswahl() if key is None else key
+        if key:
+            self._ausgeblendet.symmetric_difference_update((key,))
+            self._anzeigen(key)
+        return "break"
+
+    def _verschieben(self, schritt):
+        key = self._auswahl()
+        if key is not None:
+            i = self._reihe.index(key)
+            j = i + schritt
+            if 0 <= j < len(self._reihe):
+                self._reihe[i], self._reihe[j] = self._reihe[j], self._reihe[i]
+                self._anzeigen(key)
+
+    def _standard(self):
+        self._reihe = list(self._namen)
+        self._ausgeblendet.clear()
+        self._anzeigen()
+
+    def _ok(self):
+        self.result = self._reihe, self._ausgeblendet
+        self.destroy()
+
+
+class VerbindungsformDialog(tk.Toplevel):
+    """Choose a corner or T-junction, ready to place in the schematic."""
+
+    FORMEN = {
+        "ecke": ("dlg.verb.ecken", ((90, 0), (90, 180), (270, 0), (270, 180))),
+        "abzweig": ("dlg.verb.abzweige", ((180, 0, 90), (180, 0, 270),
+                                         (90, 270, 0), (90, 270, 180))),
+    }
+    PFEILE = {90: "↑", 0: "→", 270: "↓", 180: "←"}
+    ARME_BILD = {90: (24, 5, 28, 22), 0: (24, 18, 44, 22),
+                 270: (24, 18, 28, 35), 180: (8, 18, 28, 22)}
+
+    def __init__(self, parent, form=None):
+        super().__init__(parent)
+        self.result = None
+        self.erweitert = False
+        self.title(tr(self.FORMEN[form][0] if form else "dlg.verb.formen"))
+        self.transient(parent)
+        self.resizable(False, False)
+        _modal(self)
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        self._bilder = []
+        gruppen = (self.FORMEN[form],) if form else self.FORMEN.values()
+        for titel, formen in gruppen:
+            if not form:
+                ttk.Label(f, text=tr(titel), style="Title.TLabel").pack(anchor=tk.W, pady=(4, 2))
+            reihe = ttk.Frame(f)
+            reihe.pack(fill=tk.X, pady=(0, 8))
+            for arme in formen:
+                bild = self._formbild(arme)
+                self._bilder.append(bild)
+                ttk.Button(reihe, image=bild, compound=tk.TOP,
+                           text=" ".join(self.PFEILE[arm] for arm in arme),
+                           command=lambda a=arme: self._waehlen(a)).pack(
+                               side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+        ttk.Label(f, text=tr("dlg.verb.formen_hinweis"), style="Hint.TLabel",
+                  wraplength=320, justify=tk.LEFT).pack(anchor=tk.W, pady=(2, 8))
+        bf = ttk.Frame(f)
+        bf.pack(fill=tk.X)
+        if not form:
+            ttk.Button(bf, text=tr("dlg.verb.erweitert"), command=self._erweitert).pack(side=tk.LEFT)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.RIGHT)
+        self.bind("<Escape>", lambda _e: self.destroy())
+        _zentrieren(self, parent)
+        self.wait_window(self)
+
+    def _formbild(self, arme):
+        bild = tk.PhotoImage(master=self, width=52, height=40)
+        farbe = FARBEN["cyan"]
+        for arm in arme:
+            bild.put(farbe, to=self.ARME_BILD[arm])
+        if len(arme) == 3:
+            bild.put(farbe, to=(22, 16, 30, 24))
+            bild.put(farbe, to=(20, 18, 32, 22))
+        return bild
+
+    def _waehlen(self, arme):
+        self.result = {"arme": sorted(arme), "punkt": len(arme) == 3, "ausrichtung": 0}
+        self.destroy()
+
+    def _erweitert(self):
+        self.erweitert = True
+        self.destroy()
+
+
 class VerbindungDialog(tk.Toplevel):
     """Arms and dot of a junction (same layout as the pin dialog).
     result: {'arme': [0|90|180|270, ...], 'punkt': bool} or None."""
@@ -3600,7 +4480,7 @@ class FestMaskeDialog(tk.Toplevel):
 
     def __init__(self, parent, titel, felder, werte=None, rolle=None, hinweis="",
                  zusatz=(), spiegel=None, ausgeblendet=None, einpolig=None, pole=None,
-                 darstellung=None):
+                 darstellung=None, trennplatte=None):
         super().__init__(parent)
         self.result = None
         werte = werte or {}
@@ -3658,6 +4538,13 @@ class FestMaskeDialog(tk.Toplevel):
                 ttk.Radiobutton(df, text=tr("dlg.klemme.darstellung." + w), value=w,
                                 variable=self.v_darst).pack(anchor=tk.W)
             row += 1
+        self.v_trenn = tk.BooleanVar(value=bool(trennplatte))
+        self._trenn = trennplatte is not None
+        if self._trenn:                      # terminal: partition plate after it
+            ttk.Checkbutton(f, text=tr("dlg.klemme.trennplatte"),
+                            variable=self.v_trenn).grid(
+                row=row, column=0, columnspan=3, sticky=tk.W, pady=(6, 0))
+            row += 1
         self.v_einpolig = tk.BooleanVar(value=bool(einpolig))
         self._einpolig = einpolig is not None
         if self._einpolig:
@@ -3709,6 +4596,7 @@ class FestMaskeDialog(tk.Toplevel):
                        "spiegel": self.v_spiegel.get() if self._spiegel else None,
                        "einpolig": bool(self.v_einpolig.get()) if self._einpolig else None,
                        "darstellung": self.v_darst.get() if self._darst else None,
+                       "trennplatte": bool(self.v_trenn.get()) if self._trenn else None,
                        "pole": self.v_pole.get().strip() if self._pole else None,
                        "zusatz": {k: v.get().strip() for k, v in self._zvars.items()},
                        "ausgeblendet": {t for t, v in self._sicht.items() if not v.get()}}
@@ -3743,7 +4631,9 @@ class TitleBlockDialog(tk.Toplevel):
             self.lb.insert(tk.END, label)
         self.lb.pack(fill=tk.BOTH, expand=True)
         idx = 1 if len(entries) > 1 else 0
-        if preselect in self._keys:
+        if preselect == "" and None in self._keys:
+            idx = self._keys.index(None)
+        elif preselect is not None and preselect in self._keys:
             idx = self._keys.index(preselect)
         self.lb.selection_set(idx)
         self.lb.see(idx)
@@ -4007,7 +4897,7 @@ class SchnellauswahlDialog(tk.Toplevel):
         self._alle = alle
         self.vars = {}
         felder = (("typ", tr("txt.0233")),
-                  ("layer", "Layer:"),
+                  ("layer", tr("tb.layer")),
                   ("farbe", tr("txt.0234")),
                   ("linientyp", tr("txt.0235")))
         for row, (key, text) in enumerate(felder):

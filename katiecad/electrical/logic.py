@@ -565,6 +565,70 @@ def einrast_punkte(el):
     return []
 
 
+PIN_MAGNET = 1.5       # mm: a pin this close to another pin's line snaps onto it (less than
+                       # half the 5 mm pin pitch, so a pole never jumps to the next one)
+
+
+def _magnet_ziele(elemente, neue):
+    """Anchors of all other objects: [(x, y, directions|None)]."""
+    ids = {id(o) for o in neue}
+    andere = [e for e in elemente if id(e) not in ids and not isinstance(e, Leitung)]
+    return [(a[0], a[1], a[2]) for a in _auto_anker(andere)]
+
+
+def _beste_verschiebung(pins, ziele, achse, tol):
+    """Shift along `achse` (0 = x, 1 = y) that makes most pins coincide with
+    the column (x) or row (y) of another pin; ties: the smallest shift.
+    Only pins that can be wired that way count (vertical wire for x, horizontal
+    for y). -> shift or 0.0"""
+    passt = (90, 270) if achse == 0 else (0, 180)
+
+    def wirkt(d):
+        return d is None or any(r in d for r in passt)
+
+    eigene = [p[achse] for p in pins if wirkt(p[2])]
+    fremde = sorted({round(z[achse], 6) for z in ziele if wirkt(z[2])})
+    if not eigene or not fremde:
+        return 0.0
+    kandidaten = set()
+    for e in eigene:
+        for f in fremde:
+            if abs(f - e) <= tol:
+                kandidaten.add(round(f - e, 6))
+    best, best_n = 0.0, 0
+    for d in sorted(kandidaten, key=abs):
+        n = sum(1 for e in eigene for f in fremde if abs(e + d - f) <= TOL)
+        if n > best_n:
+            best, best_n = d, n
+    return best if abs(best) > TOL else 0.0
+
+
+def pins_ausrichten(elemente, neue, tol=PIN_MAGNET):
+    """Pin magnet: devices / terminals that were inserted or moved so that a pin
+    lies up to `tol` mm beside the column (or row) of a pin of another object
+    are shifted onto it, so the automatic wire connects them. Objects moved
+    together keep their positions to each other: the whole group gets one
+    shift (x and y independently), the one that makes most pins coincide.
+    Nothing happens without a device or terminal in `neue`.
+    -> (dx, dy) applied."""
+    neue = list(neue)
+    pins = []
+    for obj in neue:
+        if isinstance(obj, (BlockReferenz, Klemme)):
+            pins += [(a[0], a[1], a[2]) for a in _auto_anker([obj])]
+    if not pins:
+        return 0.0, 0.0
+    ziele = _magnet_ziele(elemente, neue)
+    if not ziele:
+        return 0.0, 0.0
+    dx = _beste_verschiebung(pins, ziele, 0, tol)
+    dy = _beste_verschiebung(pins, ziele, 1, tol)
+    if dx or dy:
+        for obj in neue:
+            obj.verschieben(dx, dy)
+    return dx, dy
+
+
 def leitungen_einrasten(elemente, neue, tol=0.5):
     """If an object (pin, junction, terminal, device) is placed on a wire,
     the wire is interrupted:
@@ -763,15 +827,44 @@ def leitungen_automatisch(elemente):
                 vorhanden[treffer] = l
         elif l.auto:
             weg.append(l)                        # no longer possible
+    # line type / width / colour set by the user survive when a piece is rebuilt
+    # (e.g. a device was moved): the new piece takes them from a removed piece
+    # that ended at the same point
+    stile = {}
+    for l in weg:
+        st = leitung_stil(l)
+        if st:
+            for p in ((l.x1, l.y1), (l.x2, l.y2)):
+                stile.setdefault(_pkt_key(*p), st)
     for l in weg:
         elemente.remove(l)
     neu = 0
     for k, (x1, y1, x2, y2, bes) in soll.items():
         if k in vorhanden:
             continue
-        elemente.append(Leitung(x1, y1, x2, y2, auto=True, layer=E_LINES))
+        l = Leitung(x1, y1, x2, y2, auto=True, layer=E_LINES)
+        st = stile.get(_pkt_key(x1, y1)) or stile.get(_pkt_key(x2, y2))
+        if st:
+            for attr, wert in st.items():
+                setattr(l, attr, wert)
+        elemente.append(l)
         neu += 1
     return neu, len(weg), weg
+
+
+def _pkt_key(x, y):
+    return (round(x, 2), round(y, 2))
+
+
+def leitung_stil(l):
+    """{attribute: value} of the style a wire piece got by hand (line type,
+    width, colour) - empty if it still has the defaults of a new wire."""
+    neu = Leitung(0, 0, 1, 0)
+    out = {}
+    for attr in ("linientyp", "staerke", "farbe", "eig_farbe"):
+        if getattr(l, attr, None) != getattr(neu, attr, None):
+            out[attr] = getattr(l, attr)
+    return out
 
 
 def kabel_kreuzungen(elemente):
