@@ -476,10 +476,13 @@ class KanalDialog(tk.Toplevel):
     SCHR = ("", "schraeg", "kreuz", "voll")
 
     def __init__(self, parent, breite=60.0, hoehe=40.0, mit_hoehe=False, laenge=None, titel=None,
-                 ausrichtung=None, schraffur="", schraffur_abstand=20.0, nur_schraffur=False):
+                 ausrichtung=None, schraffur="", schraffur_abstand=20.0, nur_schraffur=False,
+                 katalog=None, ref="", max_laenge=None):
         super().__init__(parent)
         self.result = None
         self._hoehe0 = hoehe
+        self._katalog = list((katalog or {}).get("kanaele", []))
+        self._ref = ref
         self.title(titel or tr("dlg.kanal.titel_vorgabe"))
         self.transient(parent)
         _modal(self)
@@ -487,6 +490,23 @@ class KanalDialog(tk.Toplevel):
         f = ttk.Frame(self, padding=14)
         f.pack(fill=tk.BOTH, expand=True)
         zustand = "disabled" if nur_schraffur else "normal"
+        self.kat_var = tk.StringVar(value=katalog_name(self._katalog, breite, hoehe, ref)
+                                    or tr("dlg.kanal.frei"))
+        if self._katalog and not nur_schraffur:
+            kf = ttk.Frame(f)
+            kf.grid(row=8, column=0, columnspan=2, sticky=tk.W, pady=(0, 6))
+            ttk.Label(kf, text=tr("dlg.kanal.katalog")).pack(side=tk.LEFT)
+            cb = ttk.Combobox(kf, textvariable=self.kat_var, state="readonly", width=28,
+                              values=[tr("dlg.kanal.frei")] + [k["name"] for k in self._katalog])
+            cb.pack(side=tk.LEFT, padx=8)
+            cb.bind("<<ComboboxSelected>>", lambda ev: self._katalog_gewaehlt())
+        self.max_var = tk.StringVar(value="" if max_laenge is None else f"{max_laenge:g}")
+        if max_laenge is not None and not nur_schraffur:
+            mf = ttk.Frame(f)
+            mf.grid(row=9, column=0, columnspan=2, sticky=tk.W, pady=(0, 6))
+            ttk.Label(mf, text=tr("dlg.kanal.max_laenge")).pack(side=tk.LEFT)
+            ttk.Entry(mf, textvariable=self.max_var, width=8).pack(side=tk.LEFT, padx=8)
+            ttk.Label(mf, text="mm").pack(side=tk.LEFT)
         ttk.Label(f, text=tr("dlg.kanal.breite")).grid(row=0, column=0, sticky=tk.W, pady=4)
         self.breite_var = tk.StringVar(value=f"{breite:g}")
         e = ttk.Entry(f, textvariable=self.breite_var, width=10, state=zustand)
@@ -521,12 +541,19 @@ class KanalDialog(tk.Toplevel):
         ttk.Label(f, text=tr("dlg.kanal.hinweis"), style="Hint.TLabel", wraplength=380,
                   justify=tk.LEFT).grid(row=6, column=0, columnspan=2, sticky=tk.W, pady=(8, 2))
         bf = ttk.Frame(f)
-        bf.grid(row=7, column=0, columnspan=2, pady=(10, 0))
+        bf.grid(row=10, column=0, columnspan=2, pady=(10, 0))
         ttk.Button(bf, text=tr("dlg.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
         ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
         self.bind("<Return>", lambda ev: self._ok())
         self.bind("<Escape>", lambda ev: self.destroy())
+        _zentrieren(self, parent)
         self.wait_window(self)
+
+    def _katalog_gewaehlt(self):
+        k = next((k for k in self._katalog if k["name"] == self.kat_var.get()), None)
+        if k is not None:
+            self.breite_var.set(f"{k['breite']:g}")
+            self.hoehe_var.set(f"{k['hoehe']:g}")
 
     def _ok(self):
         b = _zahl(self.breite_var, 0.0, True)
@@ -539,9 +566,30 @@ class KanalDialog(tk.Toplevel):
         ausr = next((a for a in self.AUSR if tr("dlg.kanal.ausr." + a) == wahl), "mitte")
         sw = self.schr_var.get()
         schr = next((a for a in self.SCHR if tr("dlg.wand.schr." + (a or "keine")) == sw), "")
+        k = next((k for k in self._katalog if k["name"] == self.kat_var.get()), None)
+        # a catalogue entry only counts while its size is unchanged
+        ref = (k["ref"] if k is not None and abs(k["breite"] - b) < 1e-6
+               and abs(k["hoehe"] - h) < 1e-6 else ("" if k is not None else self._ref))
+        try:
+            m = float(self.max_var.get().replace(",", ".")) if self.max_var.get().strip() else None
+        except ValueError:
+            m = None
         self.result = {"breite": b, "hoehe": h, "ausrichtung": ausr, "schraffur": schr,
-                       "schraffur_abstand": abst}
+                       "schraffur_abstand": abst, "ref": ref,
+                       "max_laenge": m if (m is not None and m > 0) else None}
         self.destroy()
+
+
+def katalog_name(katalog, breite, hoehe, ref=""):
+    """Catalogue entry shown for a duct: same reference, else same size; '' = free size."""
+    if ref:
+        for k in katalog:
+            if k["ref"] == ref:
+                return k["name"]
+    for k in katalog:
+        if abs(k["breite"] - breite) < 1e-6 and abs(k["hoehe"] - hoehe) < 1e-6:
+            return k["name"]
+    return ""
 
 
 class OeffnungDialog(tk.Toplevel):
@@ -3065,7 +3113,7 @@ class DokumentationDialog(tk.Toplevel):
     STANDARD = ("deckblatt", "inhalt", "geraete", "klemmen", "kabel")
     TYPEN = STANDARD + ("verbindungen", "stueckliste", "querverweise",
                         "potenziale", "stecker", "etiketten", "revisionen", "sps",
-                        "leistenbild")
+                        "kanaele", "leistenbild")
     SEITEN_MODI = ("auto", "oben_intern", "unten_intern", "oben_unten")
 
     def __init__(self, parent, vorlagen, einst, daten, projektname,

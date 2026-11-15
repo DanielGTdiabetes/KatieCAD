@@ -1,0 +1,19 @@
+{
+  "_hinweis": "Kabelkanal-Katalog / catálogo de canaleta. max_laenge = Länge einer Stange in mm (longitud de barra). Maße und Referenzen bitte mit dem Herstellerkatalog prüfen und ergänzen (Unex Serie 77 / serie 77). Eine Kopie in <Projekt>/report_templates hat Vorrang.",
+  "max_laenge": 2000,
+  "kanaele": [
+    {"name": "25 x 25", "breite": 25, "hoehe": 25, "hersteller": "", "ref": ""},
+    {"name": "25 x 40", "breite": 25, "hoehe": 40, "hersteller": "", "ref": ""},
+    {"name": "25 x 60", "breite": 25, "hoehe": 60, "hersteller": "", "ref": ""},
+    {"name": "40 x 40", "breite": 40, "hoehe": 40, "hersteller": "", "ref": ""},
+    {"name": "40 x 60", "breite": 40, "hoehe": 60, "hersteller": "", "ref": ""},
+    {"name": "60 x 40", "breite": 60, "hoehe": 40, "hersteller": "", "ref": ""},
+    {"name": "60 x 60", "breite": 60, "hoehe": 60, "hersteller": "", "ref": ""},
+    {"name": "60 x 80", "breite": 60, "hoehe": 80, "hersteller": "", "ref": ""},
+    {"name": "80 x 60", "breite": 80, "hoehe": 60, "hersteller": "", "ref": ""},
+    {"name": "80 x 80", "breite": 80, "hoehe": 80, "hersteller": "", "ref": ""},
+    {"name": "100 x 60", "breite": 100, "hoehe": 60, "hersteller": "", "ref": ""},
+    {"name": "100 x 80", "breite": 100, "hoehe": 80, "hersteller": "", "ref": ""},
+    {"name": "120 x 80", "breite": 120, "hoehe": 80, "hersteller": "", "ref": ""}
+  ]
+}

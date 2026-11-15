@@ -4593,6 +4593,9 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                     return
                 if math.hypot(pt[0] - lp[0], pt[1] - lp[1]) < 1e-9:
                     return
+                if werkzeug == "kanal":                  # a duct stops at the bar length
+                    from katiecad.model.kanal_katalog import begrenzen
+                    pt = begrenzen(lp, pt, self._kanal_max_laenge())
                 self.aktuelle_polylinie.append(pt)
             self.letzter_punkt = pt
         elif werkzeug == "kreis":
@@ -5305,6 +5308,20 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
     _kanal_breite = 60.0
     _kanal_hoehe = 40.0
     _kanal_ausrichtung = "mitte"
+    _kanal_ref = ""
+    _kanal_max = None             # bar length (mm); None = from the catalogue
+
+    def _kanal_katalog(self):
+        """Duct catalogue of the program and the project (report_templates/kanal_katalog.json)."""
+        from katiecad.model.kanal_katalog import katalog_laden
+        programm = os.path.dirname(TB.program_folder())
+        p = getattr(self, "projekt", None)
+        return katalog_laden(SEI.spalten_ordner(programm, p.ordner if p else None))
+
+    def _kanal_max_laenge(self):
+        if self._kanal_max:
+            return self._kanal_max
+        return self._kanal_katalog()["max_laenge"]
     _kanal_schraffur = ""
     _kanal_schraffur_abstand = 20.0
     _kanal_verb_erste = None
@@ -5335,12 +5352,17 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         mit_hoehe = self.ansicht3d_aktiv() and not self._ist_layout()
         dlg = KanalDialog(self.root, self._kanal_breite, self._kanal_hoehe, mit_hoehe=mit_hoehe,
                           ausrichtung=self._kanal_ausrichtung, schraffur=self._kanal_schraffur,
-                          schraffur_abstand=self._kanal_schraffur_abstand)
+                          schraffur_abstand=self._kanal_schraffur_abstand,
+                          katalog=self._kanal_katalog(), ref=self._kanal_ref,
+                          max_laenge=self._kanal_max_laenge())
         if dlg.result is None:
             self.aktives_werkzeug.set("auswahl")
             self._werkzeug_toolbar()
             return
         self._kanal_breite = dlg.result["breite"]
+        self._kanal_ref = dlg.result.get("ref", "")
+        if dlg.result.get("max_laenge"):
+            self._kanal_max = dlg.result["max_laenge"]
         self._kanal_ausrichtung = dlg.result["ausrichtung"]
         self._kanal_schraffur = dlg.result["schraffur"]
         self._kanal_schraffur_abstand = dlg.result["schraffur_abstand"]
@@ -5354,9 +5376,11 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
 
     def _kanal_stuecke(self, punkte, geschlossen=False):
         """Straight duct pieces, one per segment of the clicked points."""
+        from katiecad.model.kanal_katalog import aufteilen
+        punkte = aufteilen(punkte, self._kanal_max_laenge())        # bars of max. length
         return [Kabelkanal([a, b], breite=self._kanal_breite, hoehe=self._kanal_hoehe,
                            schraffur=self._kanal_schraffur,
-                           schraffur_abstand=self._kanal_schraffur_abstand,
+                           schraffur_abstand=self._kanal_schraffur_abstand, ref=self._kanal_ref,
                            **self._kanal_layer_daten())
                 for a, b in kanal_kette(
                     kanal_versatz(punkte, self._kanal_ausrichtung, self._kanal_breite, geschlossen),
@@ -5410,12 +5434,14 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         dlg = KanalDialog(self.root, el.breite, el.hoehe, mit_hoehe=True,
                           laenge=el.laenge() if gerade else None, titel=tr("dlg.kanal.titel"),
                           schraffur=el.schraffur, schraffur_abstand=el.schraffur_abstand,
-                          nur_schraffur=not gerade)
+                          nur_schraffur=not gerade, katalog=self._kanal_katalog(),
+                          ref=getattr(el, "ref", ""))
         if dlg.result is None:
             return
         self._snapshot()
         if gerade:
             el.breite, el.hoehe = dlg.result["breite"], dlg.result["hoehe"]
+            el.ref = dlg.result.get("ref", "")
         el.schraffur = dlg.result["schraffur"]
         el.schraffur_abstand = dlg.result["schraffur_abstand"]
         self.redraw()

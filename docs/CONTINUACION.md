@@ -170,7 +170,12 @@ offset en X, Y o Z.
      tipo, medida, X/Y desde la esquina de referencia, cantidad — para el taller o una CNC
      (más adelante, exportar DXF plano por cara para la CNC).
    - Limitación actual a revisar: los cuerpos con cortes no se pueden estirar (STRETCH).
-2. **Canaleta como «línea» (estilo EPLAN)** sobre la placa de montaje:
+2. **HECHO (15-11-2026), primera parte:** tope de longitud de barra al dibujar (2D y 3D),
+   partición en barras, catálogo `report_templates/kanal_katalog.json` (sin referencias Unex:
+   rellenar del catálogo), referencia en `Kabelkanal.ref` / `Koerper3D.kanal["ref"]` y lista
+   `kanaele` (`model/kanal_katalog.py`, test `tests/test_kanal_katalog.py`). Falta: plano por
+   defecto = cara de la placa de montaje y etiqueta «Canaleta» en 3D como en EPLAN.
+   Diseño original: **Canaleta como «línea» (estilo EPLAN)** sobre la placa de montaje:
    - Clic en el punto inicial; la canaleta **se estira con el ratón hasta un máximo de 2000 mm**
      (longitud de barra) o se para antes con un segundo clic o tecleando la longitud; si se sigue,
      empieza otra barra (cada barra = un tramo, para la lista de materiales y el corte).

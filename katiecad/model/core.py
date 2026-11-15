@@ -2155,9 +2155,10 @@ class Kabelkanal(Polylinie):
     when the piece is shown in 3D."""
 
     def __init__(self, punkte, geschlossen=False, breite=60.0, hoehe=40.0, art="gerade",
-                 schraffur="", schraffur_abstand=20.0, **kw):
+                 schraffur="", schraffur_abstand=20.0, ref="", **kw):
         super().__init__(punkte, False, **kw)
         self.typ = "kabelkanal"
+        self.ref = str(ref or "")             # article / catalogue reference (duct list)
         self.schraffur = schraffur if schraffur in WAND_SCHRAFFUREN else ""
         self.schraffur_abstand = max(1.0, float(schraffur_abstand))
         self.art = art if art in KANAL_ARTEN else "gerade"

@@ -27,6 +27,7 @@ from katiecad.reports import daten as D
 from katiecad.reports import daten_listen as DL
 from katiecad.reports import daten_sps as DS
 from katiecad.reports import leistenbild as LB
+from katiecad.model import kanal_katalog as KK
 from katiecad.reports.netz import Netz
 from katiecad.reports.tabelle import (Spalte, tabellen_seiten,
                                       zeilen_vorbereiten, TEXT, LINIE)
@@ -46,9 +47,9 @@ def skala_fuer(fmt):
 STANDARD_TYPEN = ("deckblatt", "inhalt", "geraete", "klemmen", "kabel")
 TYPEN = STANDARD_TYPEN + ("verbindungen", "stueckliste", "querverweise",
                           "potenziale", "stecker", "etiketten", "revisionen", "sps",
-                          "leistenbild")
+                          "kanaele", "leistenbild")
 LISTEN = ("geraete", "klemmen", "kabel", "verbindungen", "stueckliste",
-          "querverweise", "potenziale", "stecker", "etiketten", "revisionen", "sps")
+          "querverweise", "potenziale", "stecker", "etiketten", "revisionen", "sps", "kanaele")
 NETZ_LISTEN = {"sps", "klemmen", "kabel", "verbindungen", "stueckliste", "querverweise",
                "potenziale", "stecker", "etiketten", "leistenbild"}
 GRAFIKEN = ("leistenbild",)        # drawings (no table, not in CSV / Excel)
@@ -167,6 +168,13 @@ _STANDARD = {
             ("kommentar", "rep.col.kommentar", 40, "l"),
             ("anschluss", "rep.col.anschluesse", 40, "l"),
             ("ort", "rep.col.ort", 16, "l")],
+    "kanaele": [("ref", "rep.col.bestellnr", 26, "l"),
+                ("hersteller", "rep.col.hersteller", 20, "l"),
+                ("masse", "rep.col.kanal_masse", 18, "l"),
+                ("art", "rep.col.art", 22, "l"),
+                ("stueck", "rep.col.anzahl", 10, "r"),
+                ("laenge", "rep.col.laenge_m", 14, "r"),
+                ("stangen", "rep.col.stangen", 14, "r")],
     "revisionen": [("stand", "rep.col.stand", 12, "l"),
                    ("aenderung", "rep.col.aenderung", 100, "l"),
                    ("name", "rep.col.name", 30, "l"),
@@ -319,7 +327,8 @@ def deckblatt_inhalt(daten, projektname, flaeche, heute, sprache, skala=1.0):
 # Rows per report type (also for the CSV export)
 # ------------------------------------------------------------------
 def listen_zeilen(typ, blaetter, nummer, netz=None, klemmen_in_geraeteliste=True,
-                  einbauorte=None, katalog=None, projektdaten=None, klemmen_seiten="auto"):
+                  einbauorte=None, katalog=None, projektdaten=None, klemmen_seiten="auto",
+                  kanal_katalog=None):
     """Rows of a list report. blaetter: [(idx, elements)];
     einbauorte: {idx: installation location of the sheet};
     klemmen_seiten: side mode of the terminal diagram (SEITEN_MODI)."""
@@ -349,6 +358,9 @@ def listen_zeilen(typ, blaetter, nummer, netz=None, klemmen_in_geraeteliste=True
         return DL.revisionsuebersicht(projektdaten)
     if typ == "sps":
         return DS.sps_liste(netz, blaetter, nummer, einbauorte)
+    if typ == "kanaele":
+        return [dict(z, art=tr("kanal.bez." + z["art"]))
+                for z in KK.kanalliste(blaetter, kanal_katalog)]
     raise ValueError(typ)
 
 
@@ -381,7 +393,8 @@ def tabellen_fuer_export(blaetter, nummer, ordner=(), klemmen_in_geraeteliste=Tr
         spalten, _opt = lade_spalten(typ, ordner, klemmen_seiten)
         zeilen = listen_zeilen(typ, blaetter, nummer, netz,
                                klemmen_in_geraeteliste, einbauorte,
-                               katalog, projektdaten, klemmen_seiten)
+                               katalog, projektdaten, klemmen_seiten,
+                               KK.katalog_laden(ordner))
         out[typ] = (_ohne_leere_einbauorte(spalten, zeilen), zeilen)
     return out
 
@@ -473,7 +486,8 @@ def _berichte_erzeugen(blaetter, projektname, daten, aktiv, vorlage, sprache,
             if typ in aktiv:
                 zeilen = listen_zeilen(typ, basis, nummer, netz,
                                        klemmen_in_geraeteliste, einbauorte,
-                                       katalog, ctx["daten"], klemmen_seiten)
+                                       katalog, ctx["daten"], klemmen_seiten,
+                                       KK.katalog_laden(ordner))
                 listen[typ] = _liste_tabelle(typ, zeilen, ordner, flaeche,
                                              namen[typ], skala, klemmen_seiten)
         hinten_n = sum(len(p) for p in listen.values())

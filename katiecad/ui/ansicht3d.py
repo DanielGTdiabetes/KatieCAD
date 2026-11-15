@@ -19,6 +19,7 @@ from tkinter import ttk
 from katiecad.ui import meldung as messagebox
 
 from katiecad.common.i18n import tr
+from katiecad.model.kanal_katalog import begrenzen as kanal_begrenzen
 from katiecad.model.core import (FARBEN, UI_SCHRIFT, Koerper3D, Gruppe3D, Skizze3D, kanal_rechteck, kanal_kette, kanal_versatz, kanal_aus_koerper, kanal_formstueck, Bemassung3D, Text3D, Viewport,
                                  quader, zylinder, kegel, pyramide, kugel)
 from katiecad.model import geom3d as G
@@ -1442,8 +1443,11 @@ class Ansicht3D(tk.Frame):
 
     def _kanal_koerper(self, ebene, punkte, art, breite, hoehe):
         daten = self.app._kanal_layer_daten()
+        kd = {"art": art, "breite": breite, "hoehe": hoehe}
+        if self.app._kanal_ref:
+            kd["ref"] = self.app._kanal_ref
         return Koerper3D("prisma", profil=punkte, z0=0.0, hoehe=hoehe, ebene=ebene,
-                         bez=tr("kanal.bez." + art), kanal={"art": art, "breite": breite}, **daten)
+                         bez=tr("kanal.bez." + art), kanal=kd, **daten)
 
     def _kanal_klick(self, e):
         """Each click after the first creates one straight duct piece (chain)."""
@@ -1462,6 +1466,7 @@ class Ansicht3D(tk.Frame):
             self.info_var.set(tr("d3.msg.kanal_weiter"))
         else:
             q = sk["pts"][-1]
+            p = kanal_begrenzen(q, p, self.app._kanal_max_laenge())    # max. one bar
             if math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6:
                 b, h = self._kanal_masse()
                 self.app._snapshot()
@@ -1609,6 +1614,7 @@ class Ansicht3D(tk.Frame):
         q0 = sk["pts"][0]
         if sk["form"] == "kanal":
             q = sk["pts"][-1]
+            p = kanal_begrenzen(q, p, self.app._kanal_max_laenge())
             if math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6:
                 b, h = self._kanal_masse()
                 vp = kanal_versatz(sk["pts"] + [p], self.zustand.get("kanal_ausr", "mitte"), b)
