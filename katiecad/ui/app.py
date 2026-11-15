@@ -93,7 +93,7 @@ from katiecad.model.core import (
     teile_bogen_durch_winkel,
 )
 from katiecad.ui.dialogs import (
-    DrahtnummernDialog,
+    DrahtnummernDialog, UmbenennenDialog,
     farbe_waehlen, VON_LAYER,
     LICENSE_TEXT, zeige_lizenz_fenster,
     _LayoutNameDialog, BlattEigenschaftenDialog, PropertiesDialog, ViewportDialog,
@@ -1195,6 +1195,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         m_projekt.add_separator()
         m_projekt.add_command(label=tr("menu.projekt.nummerieren"),
                               command=self.geraete_nummerieren)
+        m_projekt.add_command(label=tr("menu.projekt.umbenennen_zaehler"),
+                              command=self.geraete_umbenennen)
         m_projekt.add_command(label=tr("menu.projekt.drahtnummern"),
                               command=self.drahtnummern_vergeben)
         m_projekt.add_command(label=tr("menu.projekt.bauteile"),
@@ -9437,6 +9439,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self.messen_start()
         elif cmd == "nummerieren":
             self.geraete_nummerieren()
+        elif cmd == "umbenennen_zaehler":
+            self.geraete_umbenennen()
         elif cmd == "versatz_verschieben":
             self.versatz_verschieben()
         elif cmd == "drahtnummern":
@@ -11803,6 +11807,74 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self._ge_cache.clear()
         self.redraw()
         self.status.set(tr("txt.0052", p0=len(aend)))
+
+    def geraete_umbenennen(self):
+        """Project > Rename devices with counter: the selected devices (or those of the
+        sheet / project) get a new identifier from a format (10K1, 10K2 ...); auxiliary
+        contacts, single-pole copies and 3D models of the same device follow on every
+        sheet (see electrical.umbenennen)."""
+        from katiecad.electrical import umbenennen as UMB
+        if self._ist_layout():
+            self.status.set(tr("txt.0126"))
+            return
+        p = self.projekt
+        if p is not None and not self._blatt_sichern():
+            return
+        aktiv = p.aktiv if p is not None else 0
+        daten = {}
+        blaetter = [(aktiv, self.elemente)]
+        for i, pfad, d in self._andere_blaetter_daten():
+            daten[i] = (pfad, d)
+            blaetter.append((i, d.get("elemente", [])))
+        blaetter.sort(key=lambda b: b[0])
+
+        def sheet_nr(i):
+            return i + 1
+        sheet_name = (lambda i: p.blaetter[i].name) if p is not None else None
+        auswahl = [e for e in self.auswahl if NUM.geraete_felder(e) is not None]
+        bereiche = (["auswahl"] if auswahl else []) + ["blatt"] + (["projekt"] if daten else [])
+        quelle = p.doku if p is not None else getattr(self, "_umb_einst", {})
+        vorgabe = dict(UMB.STANDARD, **quelle.get("umbenennen", {}))
+
+        def planen(einst, bereich):
+            ziel = {"auswahl": auswahl, "blatt": self.elemente}.get(bereich)
+            return UMB.planen(blaetter, ziel, einst, sheet_nr, sheet_name)
+
+        def vorschau(einst, bereich):
+            return [(a if isinstance(a, str) else str(a.get("IND", "")), n)
+                    for a, n in planen(einst, bereich)]
+
+        dlg = UmbenennenDialog(self.root, vorgabe, bereiche, vorschau)
+        if dlg.result is None:
+            return
+        r = dict(dlg.result)
+        bereich = r.pop("bereich")
+        if p is not None:
+            p.doku["umbenennen"] = r
+            p.speichern()
+        else:
+            self._umb_einst = {"umbenennen": r}
+        plan = planen(r, bereich)
+        if not any(not isinstance(a, str) or a != n for a, n in plan):
+            self.status.set(tr("msg.umb.nichts"))
+            return
+        self._snapshot()
+        geaendert = UMB.anwenden(plan, blaetter)
+        fehler = []
+        for i in geaendert:
+            if i == aktiv or i not in daten:
+                continue
+            try:
+                self._json_atomar_schreiben(daten[i][0], daten[i][1])
+            except OSError as ex:
+                fehler.append(str(ex))
+        if fehler:
+            messagebox.showerror(tr("dlg.umb.titel"), "\n".join(fehler), parent=self.root)
+        self._qv_cache.clear()
+        self._ge_cache.clear()
+        self.redraw()
+        self.status.set(tr("msg.umb.fertig", n=len(plan), t=sum(geaendert.values()),
+                           b=len(geaendert)))
 
     def drahtnummern_vergeben(self):
         """Wire numbering (see electrical.drahtnummern): one number per wire,

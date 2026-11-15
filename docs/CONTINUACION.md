@@ -326,6 +326,13 @@ python -m venv .venv-pruebas
 
 ## 5. Otras tareas y pendientes anotados
 
+Peticiones del usuario (15-11-2026), funciones de EPLAN:
+
+1. **HECHO:** renombrar aparatos con contador (`electrical/umbenennen.py`, Proyecto > Renombrar aparatos con contador, `UmbenennenDialog`, test `tests/test_umbenennen.py`): formato `{sheet}{kz}{n}`, contador por letra y por hoja, orden por columnas o filas, vista previa; los contactos auxiliares (espejo), las copias unifilares y los modelos 3D (`Koerper3D.geraet`) siguen al aparato en todas las hojas. Deshacer solo cubre la hoja abierta (como «Numerar aparatos»).
+2. **Pendiente:** renumerar una regleta ya dibujada (-X1 de 1 a n, de arriba abajo o de izquierda a derecha, con reservas).
+3. **Pendiente, a aclarar con el usuario:** «editar borneros»: (a) colocar en el esquema varios bornes en vertical numerados de arriba abajo con el puente entre ellos, o (b) editor de regletas en tabla como EPLAN (orden, puentes, tapas, separadores) que actualiza el esquema.
+
+
 - **Potenciales**: además del nombre de la flecha, se habló de un menú de potenciales del proyecto
   (230VAC, 24VDC, 32VAC, 400VAC…) con color/sección por potencial. No implementado; decidir si
   aporta algo frente a las flechas con nombre libre.

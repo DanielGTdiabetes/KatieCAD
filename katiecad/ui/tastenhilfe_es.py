@@ -106,6 +106,7 @@ BESCHREIBUNG = {
     "mirror": "Simetría",
     "move": "Mover",
     "nummerieren": "Numerar aparatos automáticamente",
+    "umbenennen_zaehler": "Renombrar aparatos con contador (10K1, 10K2...)",
     "drahtnummern": "Numerar hilos",
     "versatz_verschieben": "Desplazar con offset (ΔX, ΔY, ΔZ)",
     "ofang": "Referencia a objetos sí/no",

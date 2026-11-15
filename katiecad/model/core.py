@@ -689,6 +689,8 @@ BEFEHLE = {
     "MESS": "messen", "MESSEN": "messen", "DI": "messen", "DIST": "messen",
     "DISTANZ": "messen", "MEASURE": "messen",
     "NUMMERIEREN": "nummerieren", "AUTONUM": "nummerieren", "GERAETENUMMERN": "nummerieren",
+    "UMBENENNEN": "umbenennen_zaehler", "RENOMBRAR": "umbenennen_zaehler",
+    "RENAMEDEVICES": "umbenennen_zaehler",
     "DRAHTNUMMERN": "drahtnummern", "WIRENUM": "drahtnummern", "NUMHILOS": "drahtnummern",
     "QSELECT": "schnellauswahl", "SCHNELLAUSWAHL": "schnellauswahl", "QS": "schnellauswahl",
     "VERSATZ": "versatz", "OFFSET": "versatz", "O": "versatz",

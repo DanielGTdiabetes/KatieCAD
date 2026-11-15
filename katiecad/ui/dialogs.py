@@ -3049,6 +3049,104 @@ class DrahtnummernDialog(tk.Toplevel):
         self.destroy()
 
 
+class UmbenennenDialog(tk.Toplevel):
+    """Rename devices with a counter (see electrical.umbenennen). vorgabe: settings dict;
+    bereiche: offered scopes from "auswahl" / "blatt" / "projekt"; vorschau(einst, bereich)
+    -> [(old, new)] for the preview. result: dict(settings, bereich=...) or None."""
+
+    def __init__(self, parent, vorgabe, bereiche, vorschau):
+        super().__init__(parent)
+        self.result = None
+        self._vorschau = vorschau
+        self.title(tr("dlg.umb.titel"))
+        self.transient(parent)
+        _modal(self)
+        self.configure(bg=FARBEN["bg_mittel"])
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=tr("dlg.umb.titel"), style="Title.TLabel").grid(
+            row=0, column=0, columnspan=4, sticky=tk.W)
+        ttk.Label(f, text=tr("dlg.umb.format")).grid(row=1, column=0, sticky=tk.W, pady=(8, 0))
+        self._fmt = tk.StringVar(value=str(vorgabe.get("format") or "{sheet}{kz}{n}"))
+        ttk.Entry(f, textvariable=self._fmt, width=22).grid(row=1, column=1, columnspan=3,
+                                                           sticky=tk.W, padx=(6, 0), pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.umb.format_hilfe"), style="Hint.TLabel", wraplength=420,
+                  justify=tk.LEFT).grid(row=2, column=0, columnspan=4, sticky=tk.W)
+        ttk.Label(f, text=tr("dlg.umb.start")).grid(row=3, column=0, sticky=tk.W, pady=(8, 0))
+        self._start = tk.StringVar(value=str(vorgabe.get("start", 1)))
+        ttk.Spinbox(f, from_=0, to=9999, textvariable=self._start, width=6).grid(
+            row=3, column=1, sticky=tk.W, padx=(6, 0), pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.umb.schritt")).grid(row=3, column=2, sticky=tk.W, padx=(12, 0),
+                                                      pady=(8, 0))
+        self._schritt = tk.StringVar(value=str(vorgabe.get("schritt", 1)))
+        ttk.Spinbox(f, from_=1, to=100, textvariable=self._schritt, width=5).grid(
+            row=3, column=3, sticky=tk.W, padx=(6, 0), pady=(8, 0))
+        self._je_blatt = tk.BooleanVar(value=bool(vorgabe.get("je_blatt", True)))
+        ttk.Checkbutton(f, text=tr("dlg.umb.je_blatt"), variable=self._je_blatt).grid(
+            row=4, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.umb.reihenfolge")).grid(row=5, column=0, sticky=tk.W, pady=(8, 0))
+        self._reihe = tk.StringVar(value=vorgabe.get("reihenfolge", "spalten"))
+        for i, w in enumerate(("spalten", "zeilen")):
+            ttk.Radiobutton(f, text=tr("dlg.umb." + w), variable=self._reihe, value=w).grid(
+                row=6 + i, column=0, columnspan=4, sticky=tk.W)
+        ttk.Label(f, text=tr("dlg.umb.bereich")).grid(row=8, column=0, sticky=tk.W, pady=(8, 0))
+        self._bereich = tk.StringVar(value=bereiche[0])
+        for i, w in enumerate(bereiche):
+            ttk.Radiobutton(f, text=tr("dlg.umb.b_" + w), variable=self._bereich, value=w).grid(
+                row=9 + i, column=0, columnspan=4, sticky=tk.W)
+        self.tree = ttk.Treeview(f, columns=("alt", "neu"), show="headings", height=8)
+        for c, b in (("alt", 150), ("neu", 150)):
+            self.tree.heading(c, text=tr("dlg.umb.col." + c))
+            self.tree.column(c, width=b, anchor=tk.W)
+        self.tree.grid(row=12, column=0, columnspan=4, sticky="nsew", pady=(10, 0))
+        self._info = tk.StringVar(value="")
+        ttk.Label(f, textvariable=self._info, style="Hint.TLabel", wraplength=420,
+                  justify=tk.LEFT).grid(row=13, column=0, columnspan=4, sticky=tk.W, pady=(4, 0))
+        ttk.Label(f, text=tr("dlg.umb.hinweis"), style="Hint.TLabel", wraplength=420,
+                  justify=tk.LEFT).grid(row=14, column=0, columnspan=4, sticky=tk.W, pady=(6, 0))
+        bf = ttk.Frame(f)
+        bf.grid(row=15, column=0, columnspan=4, pady=(12, 0))
+        ttk.Button(bf, text=tr("dlg.umb.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
+        for v in (self._fmt, self._start, self._schritt, self._je_blatt, self._reihe, self._bereich):
+            v.trace_add("write", lambda *a: self._aktualisieren())
+        self._aktualisieren()
+        self.bind("<Return>", lambda e: self._ok())
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.wait_window(self)
+
+    def _einst(self):
+        try:
+            start = max(0, int(self._start.get()))
+            schritt = max(1, int(self._schritt.get()))
+        except ValueError:
+            return None
+        return {"format": self._fmt.get().strip(), "start": start, "schritt": schritt,
+                "je_blatt": self._je_blatt.get(), "reihenfolge": self._reihe.get()}
+
+    def _aktualisieren(self):
+        from katiecad.electrical.umbenennen import format_gueltig
+        self.tree.delete(*self.tree.get_children())
+        e = self._einst()
+        if e is None or not format_gueltig(e["format"]):
+            self._info.set(tr("dlg.umb.format_fehler"))
+            return
+        zeilen = self._vorschau(e, self._bereich.get())
+        for alt, neu in zeilen[:500]:
+            self.tree.insert("", tk.END, values=(alt, neu))
+        geaendert = sum(1 for a, n in zeilen if a != n)
+        self._info.set(tr("dlg.umb.anzahl", n=len(zeilen), g=geaendert))
+
+    def _ok(self):
+        from katiecad.electrical.umbenennen import format_gueltig
+        e = self._einst()
+        if e is None or not format_gueltig(e["format"]):
+            messagebox.showerror(tr("dlg.umb.titel"), tr("dlg.umb.format_fehler"), parent=self)
+            return
+        self.result = dict(e, bereich=self._bereich.get())
+        self.destroy()
+
+
 class SchriftenDialog(tk.Toplevel):
     """Font manager: choose installed fonts that show up in the font lists.
     result: list of the chosen font names or None."""
