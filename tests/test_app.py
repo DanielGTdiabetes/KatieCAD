@@ -62,10 +62,14 @@ mb = MagicMock(); mb.askyesno.return_value = True; mb.askyesnocancel.return_valu
 A.messagebox = mb
 
 p_app = make_app()
+sprache = A.SPRACHE["aktuell"]
+A.SPRACHE["aktuell"] = "es"
 p_app.projekt_erstellen()
+A.SPRACHE["aktuell"] = sprache
 p = p_app.projekt
 check(p is not None and os.path.isdir(os.path.join(tmp, "Anlage 1")), "Projektordner")
-check(os.path.isfile(p.blatt_pfad(0)) and len(p.blaetter) == 1 and p.blaetter[0].name == "Blatt 1", "Blatt 1 angelegt")
+check(os.path.isfile(p.blatt_pfad(0)) and len(p.blaetter) == 1 and p.blaetter[0].name == "Hoja 1",
+      "Erstes Blatt in der Oberflächensprache erstellt")
 check(cfg.get("letzter_projektordner") == tmp, "Speicherort gemerkt")
 check(not p_app._dirty, "Nach dem Laden sauber")
 
@@ -91,7 +95,8 @@ check(p_app._undo_stack == [] or p_app.elems == ["A", "B"], "kein Undo von Blatt
 
 # Move / rename
 p_app.blatt_verschieben(+1)
-check([b.name for b in p.blaetter] == ["Stromlauf", "Blatt 1"] and p.aktiv == 1, "Verschieben, aktives Blatt folgt")
+check([b.name for b in p.blaetter] == ["Stromlauf", "Hoja 1"] and p.aktiv == 1,
+      "Verschieben, aktives Blatt folgt und behält seinen Namen")
 A.BlattEigenschaftenDialog = lambda *args, **kw: types.SimpleNamespace(result=("Klemmen", "UV7", "Gestellansicht", "Text"))
 p_app.blatt_umbenennen()
 check(p.blaetter[1].name == "Klemmen", "Umbenennen")
