@@ -4262,6 +4262,69 @@ class KoordinatenfeldDialog(tk.Toplevel):
         self.destroy()
 
 
+class VerbindungsformDialog(tk.Toplevel):
+    """Choose a corner or T-junction, ready to place in the schematic."""
+
+    FORMEN = (
+        ("dlg.verb.ecken", ((90, 0), (90, 180), (270, 0), (270, 180))),
+        ("dlg.verb.abzweige", ((180, 0, 90), (180, 0, 270),
+                               (90, 270, 0), (90, 270, 180))),
+    )
+    PFEILE = {90: "↑", 0: "→", 270: "↓", 180: "←"}
+    ARME_BILD = {90: (24, 5, 28, 22), 0: (24, 18, 44, 22),
+                 270: (24, 18, 28, 35), 180: (8, 18, 28, 22)}
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.result = None
+        self.erweitert = False
+        self.title(tr("dlg.verb.formen"))
+        self.transient(parent)
+        self.resizable(False, False)
+        _modal(self)
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        self._bilder = []
+        for titel, formen in self.FORMEN:
+            ttk.Label(f, text=tr(titel), style="Title.TLabel").pack(anchor=tk.W, pady=(4, 2))
+            reihe = ttk.Frame(f)
+            reihe.pack(fill=tk.X, pady=(0, 8))
+            for arme in formen:
+                bild = self._formbild(arme)
+                self._bilder.append(bild)
+                ttk.Button(reihe, image=bild, compound=tk.TOP,
+                           text=" ".join(self.PFEILE[arm] for arm in arme),
+                           command=lambda a=arme: self._waehlen(a)).pack(
+                               side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+        ttk.Label(f, text=tr("dlg.verb.formen_hinweis"), style="Hint.TLabel",
+                  wraplength=320, justify=tk.LEFT).pack(anchor=tk.W, pady=(2, 8))
+        bf = ttk.Frame(f)
+        bf.pack(fill=tk.X)
+        ttk.Button(bf, text=tr("dlg.verb.erweitert"), command=self._erweitert).pack(side=tk.LEFT)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.RIGHT)
+        self.bind("<Escape>", lambda _e: self.destroy())
+        _zentrieren(self, parent)
+        self.wait_window(self)
+
+    def _formbild(self, arme):
+        bild = tk.PhotoImage(master=self, width=52, height=40)
+        farbe = FARBEN["cyan"]
+        for arm in arme:
+            bild.put(farbe, to=self.ARME_BILD[arm])
+        if len(arme) == 3:
+            bild.put(farbe, to=(22, 16, 30, 24))
+            bild.put(farbe, to=(20, 18, 32, 22))
+        return bild
+
+    def _waehlen(self, arme):
+        self.result = {"arme": sorted(arme), "punkt": len(arme) == 3, "ausrichtung": 0}
+        self.destroy()
+
+    def _erweitert(self):
+        self.erweitert = True
+        self.destroy()
+
+
 class VerbindungDialog(tk.Toplevel):
     """Arms and dot of a junction (same layout as the pin dialog).
     result: {'arme': [0|90|180|270, ...], 'punkt': bool} or None."""
@@ -4748,7 +4811,7 @@ class SchnellauswahlDialog(tk.Toplevel):
         self._alle = alle
         self.vars = {}
         felder = (("typ", tr("txt.0233")),
-                  ("layer", "Layer:"),
+                  ("layer", tr("tb.layer")),
                   ("farbe", tr("txt.0234")),
                   ("linientyp", tr("txt.0235")))
         for row, (key, text) in enumerate(felder):

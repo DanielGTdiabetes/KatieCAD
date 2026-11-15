@@ -680,6 +680,7 @@ BEFEHLE = {
     "LEITUNG": "tool:leitung",
     "QV": "tool:querverweis", "QUERVERWEIS": "tool:querverweis",
     "PIN": "tool:vpunkt", "VERBINDUNG": "tool:verbindung",
+    "CODO": "tool:verbindung", "BIFURCACION": "tool:verbindung", "BIFURCACIÓN": "tool:verbindung",
     "MASKE": "tool:maske", "ELEKTROMASKE": "tool:maske",
     "KLEMME": "tool:klemme",
     "FTEXT": "tool:ftext", "FUNKTIONSTEXT": "tool:ftext",

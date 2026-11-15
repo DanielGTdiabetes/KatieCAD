@@ -103,7 +103,7 @@ from katiecad.ui.dialogs import (
     ProjektNeuDialog, AttributDefinitionDialog, BlockAttributeDialog,
     MasstextDialog, WandDialog, KanalDialog, OeffnungDialog, RaumDialog, BauteilkatalogDialog, SchnellauswahlDialog, SuchenErsetzenDialog, QuerverweisDialog, PruefungDialog, EigenschaftenPalette, VerbindungspunkteDialog, ProjektDruckDialog,
     VerbindungspunktDialog, VerbindungDialog, FestMaskeDialog,
-    KoordinatenfeldDialog,
+    KoordinatenfeldDialog, VerbindungsformDialog,
     TitleBlockDialog, DokumentationDialog, ListenAuswahlDialog, MPrintDialog, VersatzDialog, SchriftenDialog, ProjektEigenschaftenDialog,
 )
 from katiecad.reports import seiten as SEI, anwenden as ANW
@@ -307,7 +307,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
 
         self.elemente = []
 
-        self.layouts = [Layout("Layout1", Layout.STANDARD_FORMAT,
+        self.layouts = [Layout(tr("name.layout", n=1), Layout.STANDARD_FORMAT,
                                "#1c132d")]
         self.aktives_layout = 0
         # drawing backgrounds are a setting of the program, not part of the drawing file
@@ -1948,11 +1948,12 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self._mark_dirty()
 
     def neues_layout(self):
-        name = f"Layout{len(self.layouts) + 1}"
-        basis = len(self.layouts)
-        while any(l.name == name for l in self.layouts):
+        basis = len(self.layouts) + 1
+        namen = {lay.name for lay in self.layouts}
+        name = tr("name.layout", n=basis)
+        while name in namen:
             basis += 1
-            name = f"Layout{basis}"
+            name = tr("name.layout", n=basis)
         self._snapshot()
         self.layouts.append(Layout(name, self.layout_format, self.bg_layout))
         self._layout_switcher_neu_aufbauen()
@@ -3898,12 +3899,12 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             f"[{ansicht_name}]  "
             f"X = {pt[0] / einh:8.2f} {unit}   Y = {pt[1] / einh:8.2f} {unit}   |   "
             f"Zoom {self.view['zoom']:.2f}   |   "
-            f"{'Layer'}: {self.aktiver_layer.get()}   |   "
+            f"{tr('tb.layer')} {self.aktiver_layer.get()}   |   "
             f"{tr('txt.0195')}: {len(self.auswahl)}   |   "
-            f"OFang: {'AN' if self.osnap.get() else 'AUS'}   "
-            f"{tr('txt.0196')}: {'AN' if self.grid_snap.get() else 'AUS'} "
+            f"{tr('txt.0276')}: {tr('status.an' if self.osnap.get() else 'status.aus')}   "
+            f"{tr('txt.0196')}: {tr('status.an' if self.grid_snap.get() else 'status.aus')} "
             f"({self._zahl(self.fang_mm, 5):g})   "
-            f"Ortho: {'AN' if self.ortho.get() else 'AUS'}" + modus_info)
+            f"{tr('sb.ortho')}: {tr('status.an' if self.ortho.get() else 'status.aus')}" + modus_info)
 
     # ---- external references (XREF) -------------------------------------------
     def _xref_basis(self):
@@ -4520,7 +4521,9 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self._leitung_klick(x, y)
             return
         if werkzeug != "auswahl":
-            if werkzeug in ("wandverb", "kanalverb") or (werkzeug == "bemassung" and not self._pts
+            if werkzeug == "verbindung":
+                pt = self._verbindung_eingabepunkt(event)
+            elif werkzeug in ("wandverb", "kanalverb") or (werkzeug == "bemassung" and not self._pts
                                           and self.bem_art.get() in ("radius", "durchmesser")):
                 pt = self._px_zu_ctx(event.x, event.y)
             else:
@@ -6896,7 +6899,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                 default=messagebox.NO, parent=self.root):
             return False
         self.elemente = []
-        self.layouts = [Layout("Layout1", Layout.STANDARD_FORMAT, "#1c132d")]
+        self.layouts = [Layout(tr("name.layout", n=1), Layout.STANDARD_FORMAT, "#1c132d")]
         self.aktives_layout = 0
         self.ansicht.set("modell")
         self.auswahl = []
@@ -9421,14 +9424,14 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         elif cmd in ("ofang", "ortho"):
             var = self.osnap if cmd == "ofang" else self.ortho
             a = arg.upper()
-            if a in ("EIN", "ON", "AN"):
+            if a in ("EIN", "ON", "AN", "SI", "SÍ"):
                 var.set(True)
-            elif a in ("AUS", "OFF"):
+            elif a in ("AUS", "OFF", "NO"):
                 var.set(False)
             else:
                 var.set(not var.get())
-            name = ((tr("txt.0276") if cmd == "ofang" else "Ortho"))
-            self.status.set(f"{name}: {'EIN' if var.get() else 'AUS'}")
+            name = tr("txt.0276") if cmd == "ofang" else tr("sb.ortho")
+            self.status.set(f"{name}: {tr('status.an' if var.get() else 'status.aus')}")
         elif cmd in ("move", "copy", "copybase", "array", "rotate", "stretch",
                      "scale", "mirror"):
             self._op_start(cmd)
@@ -9529,9 +9532,9 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
 
         def setze(text):
             t = text.strip().upper()
-            if t in ("EIN", "ON", "AN"):
+            if t in ("EIN", "ON", "AN", "SI", "SÍ"):
                 (self.raster_sichtbar if cmd == "raster" else self.grid_snap).set(True)
-            elif t in ("AUS", "OFF"):
+            elif t in ("AUS", "OFF", "NO"):
                 (self.raster_sichtbar if cmd == "raster" else self.grid_snap).set(False)
             elif t:
                 wert = self._parse_einzelwert(text, self._einh_faktor())
@@ -9543,7 +9546,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self._zeichne_raster()
             self.redraw()
             an = (self.raster_sichtbar if cmd == "raster" else self.grid_snap).get()
-            self.status.set(f"{name}: {var.get():g} mm, {'EIN' if an else 'AUS'}")
+            self.status.set(f"{name}: {var.get():g} mm, {tr('status.an' if an else 'status.aus')}")
 
         if arg:
             try:
@@ -9956,7 +9959,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             "fang_mm": self._zahl(self.fang_mm, 5.0),
             "layers": layers,
             "elemente": [],
-            "layouts": [Layout("Layout1", fmt, bg_l).to_dict()],
+            "layouts": [Layout(tr("name.layout", n=1), fmt, bg_l).to_dict()],
             "aktives_layout": 0,
             "ansicht": "modell",
             "sprache": SPRACHE["aktuell"],
@@ -10078,7 +10081,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         name, basis = dlg.result
         try:
             p = Projekt.erstellen(name, basis)
-            b = p.blatt_hinzufuegen("Blatt 1")
+            b = p.blatt_hinzufuegen(p.neuer_blattname(tr("name.blatt")))
             self._json_atomar_schreiben(
                 p.blatt_pfad(b),
                 self._leere_zeichnung_daten(einstellungen_uebernehmen=False))
@@ -10129,7 +10132,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             return False
         try:
             if not p.blaetter:
-                b = p.blatt_hinzufuegen("Blatt 1")
+                b = p.blatt_hinzufuegen(p.neuer_blattname(tr("name.blatt")))
                 self._json_atomar_schreiben(
                     p.blatt_pfad(b),
                     self._leere_zeichnung_daten(einstellungen_uebernehmen=False))
@@ -10452,7 +10455,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self.status.set(tr("msg.projekt.kein_projekt"))
             return
         name = _LayoutNameDialog(self.root, tr("msg.blatt.neu_titel"),
-                                 p.neuer_blattname(),
+                                 p.neuer_blattname(tr("name.blatt")),
                                  label=tr("dlg.blatt.name")).result
         if name is None:
             return
@@ -10481,7 +10484,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self.status.set(tr("msg.projekt.kein_projekt"))
             return
         name = _LayoutNameDialog(self.root, tr("msg.blatt.duplizieren_titel"),
-                                 p.kopie_name(p.blaetter[p.aktiv].name),
+                                 p.kopie_name(p.blaetter[p.aktiv].name, tr("name.kopie")),
                                  label=tr("dlg.blatt.name")).result
         if name is None:
             return
@@ -11040,14 +11043,39 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
 
     # Junction
     def _verbindung_starten(self):
-        vor = self._vb_vorgabe or {"arme": [0, 90, 180], "punkt": True, "ausrichtung": 0}
-        dlg = VerbindungDialog(self.root, vor)
+        dlg = VerbindungsformDialog(self.root)
+        if dlg.erweitert:
+            dlg = VerbindungDialog(self.root, self._vb_vorgabe)
         if dlg.result is None:
             self.aktives_werkzeug.set("auswahl")
             self._werkzeug_gewechselt()
             return
         self._vb_vorgabe = dlg.result
-        self.status.set(tr("msg.verb.platzieren", art=len(dlg.result["arme"])))
+        anzahl = len(dlg.result["arme"])
+        if anzahl == 3:
+            self.status.set(tr("msg.verb.abzweig_platzieren"))
+        else:
+            self.status.set(tr("msg.verb.platzieren", art=anzahl))
+
+    def _verbindung_eingabepunkt(self, event):
+        """A T snaps across the wire while keeping the along-wire cursor snap."""
+        punkt = self._eingabepunkt(event)
+        arme = (self._vb_vorgabe or {}).get("arme", ())
+        if len(arme) != 3:
+            return punkt
+        waagerecht = 0 in arme and 180 in arme
+        leitungen = [el for el in self._ziel_liste()
+                     if isinstance(el, Leitung) and self._el_sichtbar(el)
+                     and (el.y1 == el.y2 if waagerecht else el.x1 == el.x2)]
+        x, y = self._px_zu_ctx(event.x, event.y)
+        treffer = naechster_leitungspunkt(leitungen, x, y, 6.0 / self._ctx_skala())
+        if treffer is None:
+            return punkt
+        leitung, x, y = treffer
+        gerastert = (punkt[0], y) if waagerecht else (x, punkt[1])
+        if naechster_leitungspunkt((leitung,), *gerastert, 0.001):
+            return gerastert
+        return x, y
 
     def _neue_verbindung(self, x, y):
         v = self._vb_vorgabe
@@ -11275,7 +11303,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
 
     def _geister_vorschau(self, event, wz):
         """Preview (ghost image) for junction / mask / terminal."""
-        pt = self._eingabepunkt(event)
+        pt = self._verbindung_eingabepunkt(event) if wz == "verbindung" else self._eingabepunkt(event)
         if wz == "verbindung":
             if not self._vb_vorgabe:
                 return False

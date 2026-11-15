@@ -67,6 +67,22 @@ a.layers["0"].sichtbar = True
 a._ist_layout = lambda: True; n = len(a.elemente); a._leitung_klick(10, 10); check(len(a.elemente) == n and a._leitung_p1 is None, "im Layout inaktiv")
 a._ist_layout = lambda: False
 
+# ---------- Place a T-junction on an off-grid wire ----------
+a = make()
+a.elemente = [core.Leitung(0, 12, 30, 12)]
+A.VerbindungsformDialog = lambda _parent: NS(
+    erweitert=False, result={"arme": [0, 90, 180], "punkt": True, "ausrichtung": 0})
+a._verbindung_starten()
+a._eingabepunkt = lambda _event: (15, 10)
+a._px_zu_ctx = lambda _x, _y: (16, 12.2)
+a._ctx_skala = lambda: 2.0
+punkt = a._verbindung_eingabepunkt(NS(x=32, y=24))
+check(punkt == (15.0, 12.0), "T rastet quer auf die Leitung und längs auf das Raster")
+a._verbindung_platzieren(*punkt)
+check(len(a.elemente) == 3 and isinstance(a.elemente[-1], core.Verbindung)
+      and a.elemente[-1].punkt and a.elemente[-1].arme == [0, 90, 180],
+      "T teilt die Leitung und übernimmt die gewählte Form")
+
 # ---------- Place connection point ----------
 a = make()
 A.VerbindungspunktDialog = lambda parent, wert, sichtbar, titel=None, richtungen=None: NS(result=None)

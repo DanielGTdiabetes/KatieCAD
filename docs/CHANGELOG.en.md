@@ -1,6 +1,7 @@
 # Changes
 
 ## Unreleased
+- New: Pick 90° corners and T-junctions visually from the Electrical menu. A T-junction snaps onto an existing wire. Snap indicators and default sheet and layout names follow the interface language.
 - Fix: Frame and title block can be inserted from Model. The app opens and fits the layout, and initially suggests a template for its paper size and interface language.
 - Fix: Wire numbering rejects formats that cannot produce unique numbers, terminal renumbering and editing include inherited strip names, and 3D sources with the same filename use separate cache files.
 - Fix: **PLC symbols** (`symbols/10 PLC`) have their invisible attributes back (PLC kind, station, slot, symbol/comment per channel) - the PLC list was empty with the redrawn symbols. Tool `tools/plc_attribute_ergaenzen.py` (only adds what is missing, also for own symbol folders)

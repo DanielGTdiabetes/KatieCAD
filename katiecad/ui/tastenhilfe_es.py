@@ -143,7 +143,7 @@ BESCHREIBUNG = {
     "tool:stutzen": "Recortar",
     "tool:text": "Texto",
     "tool:tuer": "Puerta en muro",
-    "tool:verbindung": "Unión",
+    "tool:verbindung": "Codos de 90° y bifurcaciones en T",
     "tool:vpunkt": "Punto de conexión (pin)",
     "tool:wand": "Muro",
     "undo": "Deshacer",
