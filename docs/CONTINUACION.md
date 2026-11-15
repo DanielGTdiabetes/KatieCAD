@@ -136,7 +136,10 @@ enganche del modelo), menú 3D > «Importar modelo de equipo», colocación sobr
 OCP generado en el test). Falta: asociación al símbolo/artículo y «Colocar equipos» (punto 4),
 puntos de captura definidos por el usuario y carril DIN (punto 7).
 
-4. **Modelo 3D asociado al símbolo** (petición del usuario, 15-11-2026): asignar el STEP una vez y
+4. **HECHO (15-11-2026)** a nivel de equipo y de artículo (`model/geraete3d.py`, «Eléctrico >
+   Asignar modelo 3D», «3D > Colocar equipos», test `tests/test_geraete3d.py`). Falta el nivel
+   «por símbolo» (atributo `MODELL3D` en la definición del bloque) y puntos de captura propios.
+   Diseño original: **Modelo 3D asociado al símbolo** (petición del usuario, 15-11-2026): asignar el STEP una vez y
    tenerlo ya disponible al pasar a 3D. Tres niveles, del más general al más concreto:
    - **por artículo** (TYP + fabricante, en el catálogo de piezas del proyecto `p.daten["bauteile"]`):
      todos los equipos con ese tipo heredan el modelo — lo más útil en taller;

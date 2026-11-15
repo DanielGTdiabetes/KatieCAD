@@ -464,6 +464,58 @@ def mechanik_ergebnis(form, werte, bez="", vorlage=""):
     return out
 
 
+class GeraetePlatzierenDialog(tk.Toplevel):
+    """List of the devices with a 3D model: identifier, type, model (own / of the type),
+    placed. result = the chosen row (dict) or None."""
+
+    def __init__(self, parent, zeilen):
+        super().__init__(parent)
+        self.result = None
+        self._zeilen = [z for z in zeilen if z["modell"]]
+        ohne = len(zeilen) - len(self._zeilen)
+        self.title(tr("d3.platz.titel"))
+        self.transient(parent)
+        self.configure(bg=FARBEN["bg_mittel"])
+        f = ttk.Frame(self, padding=12)
+        f.pack(fill=tk.BOTH, expand=True)
+        spalten = ("ind", "typ", "modell", "platziert")
+        self.tree = ttk.Treeview(f, columns=spalten, show="headings", height=14,
+                                 selectmode="browse")
+        for c, b in zip(spalten, (90, 160, 240, 80)):
+            self.tree.heading(c, text=tr("d3.platz.col." + c))
+            self.tree.column(c, width=b, anchor=tk.W)
+        self.tree.pack(fill=tk.BOTH, expand=True)
+        erster = None
+        for i, z in enumerate(self._zeilen):
+            iid = self.tree.insert("", tk.END, iid=str(i), values=(
+                z["ind"], z["typ"], os.path.basename(z["modell"]) + (
+                    "  (" + tr("d3.platz.typ") + ")" if z["quelle"] == "artikel" else ""),
+                "✓" if z["platziert"] else ""))
+            if erster is None and not z["platziert"]:
+                erster = iid
+        if erster is not None:
+            self.tree.selection_set(erster)
+            self.tree.see(erster)
+        ttk.Label(f, text=tr("d3.platz.hinweis", n=ohne), style="Hint.TLabel", wraplength=560,
+                  justify=tk.LEFT).pack(anchor=tk.W, pady=(8, 0))
+        bt = ttk.Frame(f)
+        bt.pack(pady=(10, 0))
+        ttk.Button(bt, text=tr("d3.platz.ok"), command=self._ok).pack(side=tk.LEFT, padx=6)
+        ttk.Button(bt, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=6)
+        self.tree.bind("<Double-1>", lambda ev: self._ok())
+        self.bind("<Return>", lambda ev: self._ok())
+        self.bind("<Escape>", lambda ev: self.destroy())
+        _zentrieren(self, parent)
+        _modal(self)
+
+    def _ok(self):
+        sel = self.tree.selection()
+        if not sel:
+            return
+        self.result = self._zeilen[int(sel[0])]
+        self.destroy()
+
+
 class ModellImportDialog(tk.Toplevel):
     """Import of a device model: front axis of the model, mesh tolerance, equipment
     identifier. result = {"front", "toleranz", "ind"} or None."""
@@ -2613,6 +2665,40 @@ class Ansicht3D(tk.Frame):
                         return b[1]
         return None
 
+    def geraete_platzieren(self):
+        """3D > Place devices: devices of the project with a 3D model (own or of their type);
+        the chosen one hangs on the mouse like an imported model (on the mounting plate)."""
+        from katiecad.fileio import modell3d as MD
+        from katiecad.model import geraete3d as G3
+        app = self.app
+        p = getattr(app, "projekt", None)
+        if p is not None:
+            if not app._blatt_sichern():
+                return
+            infos, _idx = app._zeichnungsblaetter_einlesen()
+            if infos is None:
+                return
+            blaetter = [(k, b.elemente) for k, b in enumerate(infos)]
+            katalog = p.daten.get("bauteile", [])
+        else:
+            blaetter, katalog = [(0, app.elemente)], []
+        zeilen = G3.geraete_mit_modell(blaetter, katalog, app.elemente)
+        dlg = GeraetePlatzierenDialog(app.root, zeilen)
+        app.root.wait_window(dlg)
+        z = dlg.result
+        if not z:
+            return
+        try:
+            modell = MD.laden(app.modell3d_pfad(z["modell"]))
+        except (MD.ModellFehler, OSError, ValueError) as ex:
+            messagebox.showerror(tr("d3.modell.titel"), str(ex), parent=app.root)
+            return
+        body = Koerper3D("netz", netzdaten=dict(modell["netz"], fang=modell.get("fang", [])),
+                         bez=z["ind"], geraet=z["ind"], **self._stil())
+        w, d, h = modell.get("masse", (0, 0, 0))
+        self._kopie_starten([body], ref=(0.0, 0.0, 0.0), ebene_y=self.montageplatte_y(),
+                            info=tr("d3.platz.info", ind=z["ind"], w="%g" % w, d="%g" % d, h="%g" % h))
+
     def modell_importieren(self):
         """3D > Import 3D model: STEP / STL / .katie3d -> simplified wireframe body that hangs
         on the mouse; with a cabinet its back lies on the front of the mounting plate. The
@@ -2829,6 +2915,8 @@ class Ansicht3DMixin:
             w.modus_setzen("mechanik")
         elif cmd == "modell":
             w.modell_importieren()
+        elif cmd == "platzieren":
+            w.geraete_platzieren()
         elif cmd == "block":
             w.block_bilden()
         elif cmd == "aufloesen":

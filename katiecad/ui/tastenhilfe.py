@@ -64,6 +64,7 @@ BESCHREIBUNG = {
     "3d:drehen": ("3D: Körper drehen", "3D: rotate solid"),
     "3d:extrudieren": ("3D: Fläche extrudieren", "3D: extrude"),
     "3d:loch": ("3D: Loch / Bohrung", "3D: hole"),
+    "3d:platzieren": ("3D: Geräte mit 3D-Modell platzieren", "3D: place devices with a 3D model"),
     "3d:modell": ("3D: Gerätemodell importieren (STEP / STL)", "3D: import device model (STEP / STL)"),
     "3d:mechanik": ("3D: Bearbeitung (Ausschnitte, Bohrungen auf einer Fläche)", "3D: machining (cut-outs, holes on a face)"),
     "3d:mass": ("3D: Maße", "3D: dimensions"),

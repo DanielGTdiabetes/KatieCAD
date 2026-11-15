@@ -705,6 +705,7 @@ BEFEHLE = {
     "LOCH": "3d:loch", "BOHRUNG": "3d:loch", "HOLE": "3d:loch",
     "MECHANIK": "3d:mechanik", "MECANIZADO": "3d:mechanik", "MACHINING": "3d:mechanik",
     "STEP": "3d:modell", "MODELO3D": "3d:modell", "MODELL3D": "3d:modell", "IMPORT3D": "3d:modell",
+    "PLATZIEREN": "3d:platzieren", "COLOCAR": "3d:platzieren", "PLACE": "3d:platzieren",
     "3DMASS": "3d:mass", "MASSE": "3d:mass",
     "3DDREHEN": "3d:drehen", "3DROTATE": "3d:drehen", "DREHEN3D": "3d:drehen",
     "3DABRUNDEN": "3d:abrunden", "3DFILLET": "3d:abrunden",

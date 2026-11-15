@@ -1460,6 +1460,7 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                               command=lambda: self._werkzeug_setzen("verbindung"))
         m_elektro.add_command(label=tr("menu.elektro.querverweis"),
                               command=lambda: self._werkzeug_setzen("querverweis"))
+        m_elektro.add_command(label=tr("menu.elektro.modell3d"), command=self.modell3d_zuweisen)
         m_elektro.add_separator()
         m_elektro.add_command(label=tr("menu.elektro.maske"),
                               command=lambda: self._werkzeug_setzen("maske"))
@@ -1494,6 +1495,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                          command=lambda: self.ansicht3d_befehl("mechanik"))
         m_3d.add_command(label=tr("menu.3d.modell"),
                          command=lambda: self.ansicht3d_befehl("modell"))
+        m_3d.add_command(label=tr("menu.3d.platzieren"),
+                         command=lambda: self.ansicht3d_befehl("platzieren"))
         m_3d.add_command(label=tr("menu.3d.mass"),
                          command=lambda: self.ansicht3d_befehl("mass"))
         m_3d.add_command(label=tr("menu.3d.drehen"),
@@ -5343,6 +5346,98 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         p = getattr(self, "projekt", None)
         return katalog_laden(SEI.spalten_ordner(programm, p.ordner if p else None),
                              DATEI_SCHIENE if self._kanal_schiene else DATEI)
+
+    def modell3d_konvertieren(self, pfad, einst):
+        """STEP / STL -> .katie3d in the project folder 3D (or next to the source without a
+        project). -> path to store (relative to the project) or None (message shown)."""
+        from katiecad.fileio import modell3d as MD
+        p = self.projekt
+        if pfad.lower().endswith(".katie3d"):
+            ziel = pfad
+        else:
+            ordner = os.path.join(p.ordner, "3D") if p is not None else os.path.dirname(pfad)
+            ziel = MD.cache_pfad(ordner, pfad, einst["front"])
+            self.root.config(cursor="watch")
+            self.root.update_idletasks()
+            try:
+                if not (os.path.exists(ziel) and os.path.getmtime(ziel) >= os.path.getmtime(pfad)):
+                    modell = MD.importieren(pfad, einst["front"], einst["toleranz"])
+                    os.makedirs(ordner, exist_ok=True)
+                    MD.speichern(ziel, modell)
+            except (MD.ModellFehler, OSError, ValueError) as ex:
+                messagebox.showerror(tr("d3.modell.titel"), str(ex), parent=self.root)
+                return None
+            finally:
+                self.root.config(cursor="")
+        if p is not None:
+            try:
+                rel = os.path.relpath(ziel, p.ordner)
+                if not rel.startswith(".."):
+                    return rel.replace(os.sep, "/")
+            except ValueError:
+                pass
+        return ziel
+
+    def modell3d_pfad(self, gespeichert):
+        """Absolute path of a stored model path (relative to the project folder)."""
+        p = self.projekt
+        if p is not None and gespeichert and not os.path.isabs(gespeichert):
+            return os.path.join(p.ordner, gespeichert)
+        return gespeichert
+
+    def modell3d_zuweisen(self):
+        """Electrical > Assign 3D model: the selected devices (or all of their type) get a
+        STEP / STL model; in 3D, 'Place devices' then offers them."""
+        from katiecad.fileio import modell3d as MD
+        from katiecad.model import geraete3d as G3
+        from katiecad.ui.ansicht3d import ModellImportDialog
+        geraete = [e for e in self.auswahl if isinstance(e, BlockReferenz)
+                   and e.geraet_maske() is not None]
+        if not geraete:
+            self.status.set(tr("msg.modell3d.keine_auswahl"))
+            return
+        pfad = filedialog.askopenfilename(
+            parent=self.root, title=tr("menu.elektro.modell3d"),
+            filetypes=[(tr("d3.modell.typen"), "*.step *.stp *.STEP *.STP *.stl *.STL *.katie3d"),
+                       ("*.*", "*.*")])
+        if not pfad:
+            return
+        ext = os.path.splitext(pfad)[1].lower()
+        if ext in (".step", ".stp") and not MD.ocp_verfuegbar():
+            messagebox.showerror(tr("d3.modell.titel"), tr("d3.modell.ocp_fehlt"), parent=self.root)
+            return
+        einst = {"front": "+Z", "toleranz": 0.5}
+        if ext != ".katie3d":
+            dlg = ModellImportDialog(self.root, os.path.basename(pfad), ext in (".step", ".stp"))
+            self.root.wait_window(dlg)
+            if not dlg.result:
+                return
+            einst = dlg.result
+        rel = self.modell3d_konvertieren(pfad, einst)
+        if not rel:
+            return
+        typen = sorted({G3._typ(g) for g in geraete if G3._typ(g)})
+        p = self.projekt
+        fuer_typ = False
+        if typen and p is not None:
+            antwort = messagebox.askyesnocancel(
+                tr("menu.elektro.modell3d"), tr("msg.modell3d.fuer_typ", typen=", ".join(typen)),
+                parent=self.root)
+            if antwort is None:
+                return
+            fuer_typ = antwort
+        self._snapshot()
+        if fuer_typ:
+            kat = list(p.daten.get("bauteile", []))
+            for t in typen:
+                man = next((G3._man(g) for g in geraete if G3._typ(g) == t), "")
+                G3.artikel_setzen(kat, t, rel, man)
+            p.daten["bauteile"] = kat
+            p.speichern()
+            self.status.set(tr("msg.modell3d.typ_gesetzt", n=len(typen), datei=rel))
+        else:
+            n = G3.geraet_setzen(geraete, rel)
+            self.status.set(tr("msg.modell3d.gesetzt", n=n, datei=rel))
 
     def _mechanik_vorlagen(self):
         """Machining templates of the program and the project (report_templates/mecanizado.json)."""
@@ -11778,7 +11873,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         dlg = BauteilkatalogDialog(self.root, p.daten.get("bauteile", []), vorschlaege)
         if dlg.result is None:
             return
-        p.daten["bauteile"] = dlg.result
+        from katiecad.model.geraete3d import katalog_zusammenfuehren
+        p.daten["bauteile"] = katalog_zusammenfuehren(p.daten.get("bauteile", []), dlg.result)
         p.speichern()
         self.status.set(tr("txt.0053", p0=len(dlg.result)))
 

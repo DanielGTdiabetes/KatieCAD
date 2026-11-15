@@ -54,6 +54,7 @@ BESCHREIBUNG = {
     "3d:drehen": "3D: girar sólido",
     "3d:extrudieren": "3D: extruir",
     "3d:loch": "3D: agujero",
+    "3d:platzieren": "3D: colocar equipos con modelo 3D",
     "3d:modell": "3D: importar modelo de equipo (STEP / STL)",
     "3d:mechanik": "3D: mecanizado (recortes y taladros en una cara)",
     "3d:mass": "3D: cotas",
