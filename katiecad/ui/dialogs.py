@@ -3257,6 +3257,186 @@ class KlemmenNummernDialog(tk.Toplevel):
         self.destroy()
 
 
+class KlemmenleisteDialog(tk.Toplevel):
+    """Terminal strip editor (see electrical.klemmenleiste): one row per terminal in mounting
+    order; edit number, type, manufacturer, function, jumper to the next terminal and the
+    partition plate, move rows, renumber in table order. leisten: strip names; start: the
+    strip shown first; laden(strip) -> rows. result: {strip: rows} of the edited strips or None."""
+
+    SPALTEN = (("pos", 36), ("num", 60), ("typ", 110), ("man", 90), ("per", 90),
+               ("oben", 150), ("unten", 150), ("bruecke", 80), ("trenn", 70))
+
+    def __init__(self, parent, leisten, start, laden):
+        super().__init__(parent)
+        self.result = None
+        self._laden = laden
+        self._daten = {}
+        self.title(tr("dlg.kleiste.titel"))
+        self.transient(parent)
+        _modal(self)
+        self.configure(bg=FARBEN["bg_mittel"])
+        f = ttk.Frame(self, padding=12)
+        f.pack(fill=tk.BOTH, expand=True)
+        kopf = ttk.Frame(f)
+        kopf.pack(fill=tk.X)
+        ttk.Label(kopf, text=tr("dlg.kleiste.leiste")).pack(side=tk.LEFT)
+        self._leiste = tk.StringVar(value=start)
+        cb = ttk.Combobox(kopf, textvariable=self._leiste, values=list(leisten), state="readonly",
+                          width=14)
+        cb.pack(side=tk.LEFT, padx=6)
+        cb.bind("<<ComboboxSelected>>", lambda e: self._zeigen())
+        rahmen = ttk.Frame(f)
+        rahmen.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        self.tree = ttk.Treeview(rahmen, columns=[c for c, _b in self.SPALTEN], show="headings",
+                                 height=16, selectmode="extended")
+        for c, b in self.SPALTEN:
+            self.tree.heading(c, text=tr("dlg.kleiste.col." + c))
+            self.tree.column(c, width=b, anchor=tk.W, stretch=c in ("oben", "unten"))
+        sb = ttk.Scrollbar(rahmen, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        sb.pack(side=tk.LEFT, fill=tk.Y)
+        self.tree.bind("<<TreeviewSelect>>", lambda e: self._auswahl_laden())
+        # edit panel for the selected rows
+        ed = ttk.LabelFrame(f, text=tr("dlg.kleiste.bearbeiten"), padding=8)
+        ed.pack(fill=tk.X, pady=(8, 0))
+        self._v = {}
+        for i, k in enumerate(("num", "typ", "man", "per")):
+            ttk.Label(ed, text=tr("dlg.kleiste.col." + k)).grid(row=0, column=i, sticky=tk.W, padx=3)
+            v = tk.StringVar()
+            self._v[k] = v
+            ttk.Entry(ed, textvariable=v, width=12 if k == "num" else 16).grid(
+                row=1, column=i, sticky=tk.W, padx=3)
+        self._br_namen = {"": "-", "oben": tr("dlg.kleiste.br_oben"),
+                          "unten": tr("dlg.kleiste.br_unten"), "beide": tr("dlg.kleiste.br_beide")}
+        ttk.Label(ed, text=tr("dlg.kleiste.col.bruecke")).grid(row=0, column=4, sticky=tk.W, padx=3)
+        self._br = tk.StringVar(value="-")
+        ttk.Combobox(ed, textvariable=self._br, values=list(self._br_namen.values()),
+                     state="readonly", width=12).grid(row=1, column=4, sticky=tk.W, padx=3)
+        self._trenn = tk.BooleanVar(value=False)
+        ttk.Checkbutton(ed, text=tr("dlg.kleiste.col.trenn"), variable=self._trenn).grid(
+            row=1, column=5, sticky=tk.W, padx=6)
+        ttk.Button(ed, text=tr("dlg.kleiste.uebernehmen"), command=self._uebernehmen).grid(
+            row=1, column=6, sticky=tk.W, padx=6)
+        ttk.Label(ed, text=tr("dlg.kleiste.mehrfach"), style="Hint.TLabel", wraplength=700,
+                  justify=tk.LEFT).grid(row=2, column=0, columnspan=7, sticky=tk.W, pady=(4, 0))
+        # order buttons
+        bt = ttk.Frame(f)
+        bt.pack(fill=tk.X, pady=(8, 0))
+        ttk.Button(bt, text=tr("dlg.kleiste.hoch"), command=lambda: self._schieben(-1)).pack(
+            side=tk.LEFT, padx=(0, 4))
+        ttk.Button(bt, text=tr("dlg.kleiste.runter"), command=lambda: self._schieben(1)).pack(
+            side=tk.LEFT, padx=4)
+        ttk.Button(bt, text=tr("dlg.kleiste.nummerieren"), command=self._nummerieren).pack(
+            side=tk.LEFT, padx=4)
+        ttk.Button(bt, text=tr("dlg.kleiste.sortieren"), command=self._sortieren).pack(
+            side=tk.LEFT, padx=4)
+        self._info = tk.StringVar(value="")
+        ttk.Label(f, textvariable=self._info, style="Hint.TLabel", wraplength=760,
+                  justify=tk.LEFT).pack(anchor=tk.W, pady=(6, 0))
+        ttk.Label(f, text=tr("dlg.kleiste.hinweis"), style="Hint.TLabel", wraplength=760,
+                  justify=tk.LEFT).pack(anchor=tk.W, pady=(4, 0))
+        bf = ttk.Frame(f)
+        bf.pack(pady=(10, 0))
+        ttk.Button(bf, text=tr("dlg.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
+        self.bind("<Escape>", lambda e: self.destroy())
+        self._zeigen()
+        self.wait_window(self)
+
+    # ---- data
+    def _rows(self):
+        n = self._leiste.get()
+        if n not in self._daten:
+            self._daten[n] = self._laden(n)
+        return self._daten[n]
+
+    def _zeigen(self, auswahl=()):
+        from katiecad.electrical.klemmenleiste import pruefen
+        rows = self._rows()
+        self.tree.delete(*self.tree.get_children())
+        for i, z in enumerate(rows):
+            num = z["num"] + ("  (x%d)" % z["anzahl"] if z.get("anzahl", 1) > 1 else "")
+            self.tree.insert("", tk.END, iid=str(i), values=(
+                i + 1, num, z["typ"], z["man"], z["per"], z.get("oben", ""), z.get("unten", ""),
+                self._br_namen.get(z.get("bruecke") or "", "-") if i < len(rows) - 1 else "",
+                "|" if z.get("trenn") else ""))
+        for i in auswahl:
+            if 0 <= i < len(rows):
+                self.tree.selection_add(str(i))
+        if auswahl:
+            self.tree.see(str(auswahl[0]))
+        fehler = pruefen(rows)
+        doppelt = [rows[i]["num"] for i, a in fehler if a == "doppelt"]
+        leer = sum(1 for _i, a in fehler if a == "leer")
+        teile = [tr("dlg.kleiste.anzahl", n=len(rows))]
+        if doppelt:
+            teile.append(tr("dlg.kleiste.doppelt", nums=", ".join(doppelt)))
+        if leer:
+            teile.append(tr("dlg.kleiste.leer", n=leer))
+        self._info.set("  ".join(teile))
+
+    def _gewaehlt(self):
+        return sorted(int(i) for i in self.tree.selection())
+
+    def _auswahl_laden(self):
+        sel = self._gewaehlt()
+        if not sel:
+            return
+        z = self._rows()[sel[0]]
+        for k in self._v:
+            self._v[k].set("" if (k == "num" and len(sel) > 1) else z.get(k, ""))
+        self._br.set(self._br_namen.get(z.get("bruecke") or "", "-"))
+        self._trenn.set(bool(z.get("trenn")))
+
+    def _uebernehmen(self):
+        sel = self._gewaehlt()
+        if not sel:
+            return
+        rows = self._rows()
+        rueck = {v: k for k, v in self._br_namen.items()}
+        for i in sel:
+            z = rows[i]
+            for k, v in self._v.items():
+                if k == "num" and len(sel) > 1:
+                    continue
+                if len(sel) > 1 and not v.get().strip():
+                    continue                     # several rows: an empty field changes nothing
+                z[k] = v.get().strip()
+            z["bruecke"] = rueck.get(self._br.get(), "")
+            z["trenn"] = bool(self._trenn.get())
+        self._zeigen(sel)
+
+    def _schieben(self, d):
+        sel = self._gewaehlt()
+        rows = self._rows()
+        if not sel or (d < 0 and sel[0] == 0) or (d > 0 and sel[-1] == len(rows) - 1):
+            return
+        for i in (sel if d < 0 else reversed(sel)):
+            rows[i + d], rows[i] = rows[i], rows[i + d]
+        self._zeigen([i + d for i in sel])
+
+    def _nummerieren(self):
+        from katiecad.electrical.klemmenleiste import umnummerieren
+        umnummerieren(self._rows())
+        self._zeigen(self._gewaehlt())
+
+    def _sortieren(self):
+        from katiecad.electrical.klemmenleiste import nach_nummer_sortiert
+        self._daten[self._leiste.get()] = nach_nummer_sortiert(self._rows())
+        self._zeigen()
+
+    def _ok(self):
+        from katiecad.electrical.klemmenleiste import pruefen
+        for n, rows in self._daten.items():
+            if any(a == "doppelt" for _i, a in pruefen(rows)):
+                if not messagebox.askyesno(tr("dlg.kleiste.titel"),
+                                           tr("dlg.kleiste.doppelt_frage", leiste=n), parent=self):
+                    return
+        self.result = dict(self._daten)
+        self.destroy()
+
+
 class SchriftenDialog(tk.Toplevel):
     """Font manager: choose installed fonts that show up in the font lists.
     result: list of the chosen font names or None."""

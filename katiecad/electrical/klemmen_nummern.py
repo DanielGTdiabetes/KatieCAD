@@ -7,7 +7,11 @@ start, start + step ... (field NUM, format "{n}" or e.g. "{n:02}") over the whol
 
   "spalten"   by position: sheet by sheet, left to right, top to bottom in a column
   "zeilen"    by position: sheet by sheet, top to bottom, left to right in a row
-  "bestehend" keeps the present order of the numbers and only closes the gaps
+  "bestehend" keeps the present mounting order (the position set in the terminal strip
+              editor, otherwise the numbers) and only closes the gaps
+
+After renumbering by position the mounting order follows the numbers again (Klemme.montage
+of the whole strip cleared); "bestehend" keeps it.
 
 Terminals that carry the same number in the same strip are ONE terminal drawn twice
 (single-pole view, top and bottom on different sheets ...): they keep sharing the new
@@ -33,15 +37,17 @@ def _wert(v, tag):
     return "" if v.upper() == tag else v
 
 
-def klemmen(elemente):
-    """Terminals of a sheet: [(werte dict, x, y)]."""
+def klemmen(elemente, mit_element=False):
+    """Terminals of a sheet: [(werte dict, x, y)] or, with mit_element,
+    [(werte dict, x, y, element)]."""
     out = []
     for el in elemente:
         if _get(el, "typ") != "klemme":
             continue
         w = _get(el, "werte")
         if isinstance(w, dict):
-            out.append((w, _get(el, "x", 0.0), _get(el, "y", 0.0)))
+            t = (w, _get(el, "x", 0.0), _get(el, "y", 0.0))
+            out.append(t + (el,) if mit_element else t)
     return out
 
 
@@ -91,7 +97,8 @@ def _pos(x, y, reihenfolge):
 
 def planen(blaetter, auswahl, einstellung=None):
     """New numbers for the strips in `auswahl` (names; None = all).
-    -> [(strip, old, new, [werte dicts])] in the new order, strip by strip."""
+    -> [(strip, old, new, [terminal elements])] in the new order, strip by strip; names
+    kept because of their letters come with new == old."""
     e = dict(STANDARD, **(einstellung or {}))
     try:
         start, schritt = int(e["start"]), max(1, int(e["schritt"]))
@@ -100,44 +107,73 @@ def planen(blaetter, auswahl, einstellung=None):
     reihe = {b: i for i, (b, _el) in enumerate(blaetter)}
     gruppen = {}                       # strip -> {key: [sortkey, old, [werte]]}
     for b, elemente in blaetter:
-        for w, x, y in klemmen(elemente):
+        for w, x, y, el in klemmen(elemente, True):
             leiste = _wert(w.get("IND"), "IND")
             if not leiste or (auswahl is not None and leiste not in auswahl):
                 continue
             alt = _wert(w.get("NUM"), "NUM")
-            if alt and e["buchstaben_behalten"] and hat_buchstaben(alt):
-                continue
+            fest = bool(alt and e["buchstaben_behalten"] and hat_buchstaben(alt))
             sk = (reihe.get(b, 0),) + _pos(x, y, e["reihenfolge"])
             if e["reihenfolge"] == "bestehend":
-                sk = (0, natuerlich(alt), not alt) + sk if alt else (1,) + sk
+                m = _get(el, "montage")
+                mk = (0, m) if m is not None else (1, 0)
+                sk = mk + ((0, natuerlich(alt)) if alt else (1, [])) + sk
             schl = ("alt", alt) if alt else ("neu", id(w))
             g = gruppen.setdefault(leiste, {})
             if schl in g:
                 g[schl][0] = min(g[schl][0], sk)
-                g[schl][2].append(w)
+                g[schl][2].append(el)
             else:
-                g[schl] = [sk, alt, [w]]
+                g[schl] = [sk, alt, [el], fest]
     out = []
     for leiste in sorted(gruppen, key=natuerlich):
         n = start
-        for sk, alt, werte in sorted(gruppen[leiste].values(), key=lambda g: g[0]):
+        for sk, alt, werte, fest in sorted(gruppen[leiste].values(), key=lambda g: g[0]):
+            if fest:
+                out.append((leiste, alt, alt, werte))
+                continue
             out.append((leiste, alt, format_nummer(e["format"], n), werte))
             n += schritt
     return out
 
 
-def anwenden(plan):
-    """Writes the new numbers. -> number of changed terminals (drawn terminals)."""
+def _setzen(el, k, v):
+    if isinstance(el, dict):
+        if v is None:
+            el.pop(k, None)
+        else:
+            el[k] = v
+    else:
+        setattr(el, k, v)
+
+
+def _aendert(el, neu, montage_behalten):
+    return (_wert(_get(el, "werte").get("NUM"), "NUM") != neu
+            or (not montage_behalten and _get(el, "montage") is not None))
+
+
+def anwenden(plan, montage_behalten=False):
+    """Writes the new numbers; unless montage_behalten, clears the explicit mounting position
+    (the order follows the numbers again). -> number of changed terminals."""
     n = 0
-    for _leiste, _alt, neu, werte in plan:
-        for w in werte:
-            if w.get("NUM") != neu:
-                w["NUM"] = neu
-                n += 1
+    for _leiste, _alt, neu, elemente in plan:
+        for el in elemente:
+            if not _aendert(el, neu, montage_behalten):
+                continue
+            if neu:
+                _get(el, "werte")["NUM"] = neu
+            if not montage_behalten:
+                _setzen(el, "montage", None)
+            n += 1
     return n
+
+
+def offen(plan, montage_behalten=False):
+    """Rows of the plan that change something (number or explicit position)."""
+    return [z for z in plan if any(_aendert(el, z[2], montage_behalten) for el in z[3])]
 
 
 def blaetter_geaendert(plan, blaetter):
     """Sheet keys whose terminals the plan touches."""
-    ids = {id(w) for *_x, werte in plan for w in werte}
-    return {b for b, el in blaetter if any(id(w) in ids for w, _x, _y in klemmen(el))}
+    ids = {id(el) for *_x, elemente in plan for el in elemente}
+    return {b for b, els in blaetter if any(id(el) in ids for el in els)}

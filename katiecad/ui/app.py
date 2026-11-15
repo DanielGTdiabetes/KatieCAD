@@ -93,7 +93,7 @@ from katiecad.model.core import (
     teile_bogen_durch_winkel,
 )
 from katiecad.ui.dialogs import (
-    DrahtnummernDialog, UmbenennenDialog, KlemmenNummernDialog,
+    DrahtnummernDialog, UmbenennenDialog, KlemmenNummernDialog, KlemmenleisteDialog,
     farbe_waehlen, VON_LAYER,
     LICENSE_TEXT, zeige_lizenz_fenster,
     _LayoutNameDialog, BlattEigenschaftenDialog, PropertiesDialog, ViewportDialog,
@@ -1199,6 +1199,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                               command=self.geraete_umbenennen)
         m_projekt.add_command(label=tr("menu.projekt.klemmen_nummern"),
                               command=self.klemmen_nummerieren)
+        m_projekt.add_command(label=tr("menu.projekt.klemmenleiste"),
+                              command=self.klemmenleiste_bearbeiten)
         m_projekt.add_command(label=tr("menu.projekt.drahtnummern"),
                               command=self.drahtnummern_vergeben)
         m_projekt.add_command(label=tr("menu.projekt.bauteile"),
@@ -9445,6 +9447,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self.geraete_umbenennen()
         elif cmd == "klemmen_nummern":
             self.klemmen_nummerieren()
+        elif cmd == "klemmenleiste":
+            self.klemmenleiste_bearbeiten()
         elif cmd == "versatz_verschieben":
             self.versatz_verschieben()
         elif cmd == "drahtnummern":
@@ -11922,13 +11926,13 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         else:
             self._kln_einst = {"klemmen_nummern": r}
         plan = KN.planen(blaetter, namen, r)
-        betroffen = KN.blaetter_geaendert(
-            [z for z in plan if any(w.get("NUM") != z[2] for w in z[3])], blaetter)
+        behalten = r.get("reihenfolge") == "bestehend"
+        betroffen = KN.blaetter_geaendert(KN.offen(plan, behalten), blaetter)
         if not betroffen:
             self.status.set(tr("msg.kln.nichts"))
             return
         self._snapshot()
-        n = KN.anwenden(plan)
+        n = KN.anwenden(plan, behalten)
         fehler = []
         for i in betroffen:
             if i == aktiv or i not in daten:
@@ -11941,6 +11945,75 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             messagebox.showerror(tr("dlg.kln.titel"), "\n".join(fehler), parent=self.root)
         self.redraw()
         self.status.set(tr("msg.kln.fertig", n=n, l=len(namen), b=len(betroffen)))
+
+    def _klemmen_ziele(self):
+        """{(sheet, x, y): (top, bottom)} targets of every terminal from the terminal
+        diagram (for the terminal strip editor); {} when it cannot be computed."""
+        from katiecad.electrical import klemmenleiste as KL
+        from katiecad.reports import daten as RD
+        try:
+            p = self.projekt
+            if p is not None:
+                infos, indizes = self._zeichnungsblaetter_einlesen()
+                if infos is None:
+                    return {}
+                bl = [(i, b.elemente) for i, b in zip(indizes, infos)]
+            else:
+                leitungen_automatisch(self.elemente)
+                bl = [(0, self.elemente)]
+            return KL.ziele_index(RD.klemmenplan(SEI.netz_aufbauen(bl), bl, lambda i: i + 1))
+        except Exception:                       # the editor works without targets too
+            return {}
+
+    def klemmenleiste_bearbeiten(self):
+        """Project > Edit terminal strip: table of a strip in mounting order (number, type,
+        jumper, partition plate, order), written to the terminals of every sheet (see
+        electrical.klemmenleiste)."""
+        from katiecad.electrical import klemmenleiste as KL, klemmen_nummern as KN
+        if self._ist_layout():
+            self.status.set(tr("txt.0126"))
+            return
+        p = self.projekt
+        if p is not None and not self._blatt_sichern():
+            return
+        aktiv = p.aktiv if p is not None else 0
+        daten = {}
+        blaetter = [(aktiv, self.elemente)]
+        for i, pfad, d in self._andere_blaetter_daten():
+            daten[i] = (pfad, d)
+            blaetter.append((i, d.get("elemente", [])))
+        blaetter.sort(key=lambda b: b[0])
+        leisten = sorted(KN.leisten(blaetter), key=KN.natuerlich)
+        if not leisten:
+            self.status.set(tr("msg.kln.keine_leisten"))
+            return
+        gewaehlt = [KN._wert(w.get("IND"), "IND") for w, _x, _y in KN.klemmen(self.auswahl)]
+        start = next((n for n in gewaehlt if n in leisten), leisten[0])
+        ziele = self._klemmen_ziele()
+        dlg = KlemmenleisteDialog(self.root, leisten, start,
+                                  lambda n: KL.zeilen(blaetter, n, ziele))
+        if not dlg.result:
+            return
+        self._snapshot()
+        n, betroffen = 0, set()
+        for rows in dlg.result.values():
+            n += KL.anwenden(rows)
+            betroffen |= KL.blaetter_von(rows, blaetter)
+        if not n:
+            self.status.set(tr("msg.kleiste.nichts"))
+            return
+        fehler = []
+        for i in betroffen:
+            if i == aktiv or i not in daten:
+                continue
+            try:
+                self._json_atomar_schreiben(daten[i][0], daten[i][1])
+            except OSError as ex:
+                fehler.append(str(ex))
+        if fehler:
+            messagebox.showerror(tr("dlg.kleiste.titel"), "\n".join(fehler), parent=self.root)
+        self.redraw()
+        self.status.set(tr("msg.kleiste.fertig", n=n, l=len(dlg.result), b=len(betroffen)))
 
     def drahtnummern_vergeben(self):
         """Wire numbering (see electrical.drahtnummern): one number per wire,

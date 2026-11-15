@@ -333,7 +333,14 @@ Peticiones del usuario (15-11-2026), funciones de EPLAN:
    `KlemmenNummernDialog`, test `tests/test_klemmen_nummern.py`): por columnas, por filas o cerrando
    huecos del orden actual; PE/N/L1 se conservan; mismo número en la misma regleta = un borne. Las
    regletas se agrupan solo por IND (no por lugar de montaje). Falta: reservas (huecos a propósito).
-3. **Pendiente, a aclarar con el usuario:** «editar borneros»: (a) colocar en el esquema varios bornes en vertical numerados de arriba abajo con el puente entre ellos, o (b) editor de regletas en tabla como EPLAN (orden, puentes, tapas, separadores) que actualiza el esquema.
+3. **HECHO (opción b, elegida por el usuario):** editor de regletas en tabla
+   (`electrical/klemmenleiste.py`, `KlemmenleisteDialog`, Proyecto > Editar regleta, test
+   `tests/test_klemmenleiste.py`). Campos nuevos del borne: `Klemme.bruecke` (puente al siguiente
+   en orden de montaje: oben/unten/beide; `reports/daten._bruecken` lo une a los puentes del
+   cableado) y `Klemme.montage` (posición explícita; `klemmenplan` ordena por ella antes que por el
+   número; solo se guarda si el orden no es el de los números). Falta: reservas y accesorios
+   (topes, tapas) como filas propias; opción (a), colocación múltiple de bornes sobre varios cables.
+   Planteamiento original: (a) colocar en el esquema varios bornes en vertical numerados de arriba abajo con el puente entre ellos, o (b) editor de regletas en tabla como EPLAN (orden, puentes, tapas, separadores) que actualiza el esquema.
 
 
 - **Potenciales**: además del nombre de la flecha, se habló de un menú de potenciales del proyecto

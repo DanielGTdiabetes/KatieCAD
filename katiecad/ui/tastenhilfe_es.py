@@ -108,6 +108,7 @@ BESCHREIBUNG = {
     "nummerieren": "Numerar aparatos automáticamente",
     "umbenennen_zaehler": "Renombrar aparatos con contador (10K1, 10K2...)",
     "klemmen_nummern": "Renumerar regletas de bornes",
+    "klemmenleiste": "Editar regleta de bornes (tabla)",
     "drahtnummern": "Numerar hilos",
     "versatz_verschieben": "Desplazar con offset (ΔX, ΔY, ΔZ)",
     "ofang": "Referencia a objetos sí/no",

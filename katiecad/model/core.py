@@ -693,6 +693,7 @@ BEFEHLE = {
     "RENAMEDEVICES": "umbenennen_zaehler",
     "KLEMMENNUMMERN": "klemmen_nummern", "NUMBORNES": "klemmen_nummern",
     "RENUMBERTERMINALS": "klemmen_nummern",
+    "KLEMMENLEISTE": "klemmenleiste", "REGLETA": "klemmenleiste", "TERMINALSTRIP": "klemmenleiste",
     "DRAHTNUMMERN": "drahtnummern", "WIRENUM": "drahtnummern", "NUMHILOS": "drahtnummern",
     "QSELECT": "schnellauswahl", "SCHNELLAUSWAHL": "schnellauswahl", "QS": "schnellauswahl",
     "VERSATZ": "versatz", "OFFSET": "versatz", "O": "versatz",
@@ -5178,11 +5179,22 @@ class Klemme(_FestMaske):
     KASTEN_H = 8.0
     KASTEN_NUM = 2.5
 
-    def __init__(self, x, y, werte=None, darstellung="kreis", trennplatte=False, **kw):
+    BRUECKEN = ("", "oben", "unten", "beide")
+
+    def __init__(self, x, y, werte=None, darstellung="kreis", trennplatte=False,
+                 bruecke="", montage=None, **kw):
         super().__init__("klemme", x, y, werte, **kw)
         self.darstellung = darstellung if darstellung in self.DARSTELLUNGEN else "kreis"
         # Partition plate AFTER this terminal (terminal strip graphic / mounting order)
         self.trennplatte = bool(trennplatte)
+        # Jumper to the NEXT terminal of the strip (mounting order) on the top / bottom side,
+        # set in the terminal strip editor (without drawing it as wires)
+        self.bruecke = bruecke if bruecke in self.BRUECKEN else ""
+        # Explicit position in the strip (terminal strip editor); None = by number
+        try:
+            self.montage = None if montage is None else int(montage)
+        except (TypeError, ValueError):
+            self.montage = None
 
     def to_dict(self):
         d = super().to_dict()
@@ -5190,6 +5202,10 @@ class Klemme(_FestMaske):
             d.pop("darstellung", None)          # old files / circle: nothing to save
         if not self.trennplatte:
             d.pop("trennplatte", None)
+        if not self.bruecke:
+            d.pop("bruecke", None)
+        if self.montage is None:
+            d.pop("montage", None)
         return d
 
     def _hoehe(self):

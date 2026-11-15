@@ -231,9 +231,12 @@ def klemmenplan(netz, blaetter, nummer, einbauorte=None, seiten="auto"):
                         feld_an(felder.get(kl["blatt"], []), *_pos(k))),
             "funktion": funktion_an(ftexte.get(kl["blatt"], []), *_pos(k)),
             "_trenn": bool(getattr(k, "trennplatte", False)),
+            "_montage": getattr(k, "montage", None),
             "_blatt": kl["blatt"], "_pos": _pos(k), "_kl": kl, "_t": {}, "_s": {}})
+    # mounting order: explicit position from the terminal strip editor, then the number
     zeilen.sort(key=lambda r: (natuerlich(r["einbauort"]), r["leiste"] == "",
                                natuerlich(r["leiste"]),
+                               r["_montage"] is None, r["_montage"] or 0,
                                natuerlich(r["num"]) if r["num"] else (),
                                r["_blatt"], -r["_pos"][1], r["_pos"][0]))
     _bruecken(netz, zeilen)
@@ -314,6 +317,17 @@ def _bruecken(netz, zeilen):
                 if (j is not None and j != i and n.seite == seite
                         and zeilen[j]["_gk"] == z["_gk"]):
                     eltern[wurzel(i)] = wurzel(j)
+        # jumpers set in the terminal strip editor: to the next terminal of the strip
+        # (the next row with another number: a terminal drawn twice is one terminal)
+        for i, z in enumerate(zeilen):
+            if getattr(z["_kl"]["obj"], "bruecke", "") not in (seite, "beide"):
+                continue
+            j = i + 1
+            while (j < len(zeilen) and zeilen[j]["_gk"] == z["_gk"]
+                   and zeilen[j]["num"] and zeilen[j]["num"] == z["num"]):
+                j += 1
+            if j < len(zeilen) and zeilen[j]["_gk"] == z["_gk"]:
+                eltern[wurzel(i)] = wurzel(j)
         teile = {}
         for i in range(len(zeilen)):
             teile.setdefault(wurzel(i), []).append(i)

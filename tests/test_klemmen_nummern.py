@@ -41,15 +41,17 @@ check(KN.format_gueltig("{n:02}") and not KN.format_gueltig("X") and not KN.form
       "Format prüfen")
 
 plan = KN.planen(blaetter, {"-X1"})
+check(("PE", "PE") in [(p[1], p[2]) for p in plan], "PE bleibt (im Plan, unverändert)")
+plan = [p for p in plan if p[1] != "PE"]
 check([(p[1], p[2]) for p in plan] == [("7", "1"), ("3", "2"), ("9", "3"), ("", "4"), ("12", "5")],
       f"spaltenweise: {[(p[1], p[2]) for p in plan]}")
 check(len(plan[1][3]) == 2, "Klemme 3 doppelt gezeichnet = eine Klemme")
 
-plan = KN.planen(blaetter, {"-X1"}, {"reihenfolge": "zeilen"})
+plan = [p for p in KN.planen(blaetter, {"-X1"}, {"reihenfolge": "zeilen"}) if p[1] != "PE"]
 check([p[1] for p in plan] == ["7", "", "3", "9", "12"], f"zeilenweise: {[p[1] for p in plan]}")
 
-plan = KN.planen(blaetter, {"-X1"}, {"reihenfolge": "bestehend", "start": 10, "schritt": 2,
-                                     "format": "{n:03}"})
+plan = [p for p in KN.planen(blaetter, {"-X1"}, {"reihenfolge": "bestehend", "start": 10,
+                                                 "schritt": 2, "format": "{n:03}"}) if p[1] != "PE"]
 check([(p[1], p[2]) for p in plan] == [("3", "010"), ("7", "012"), ("9", "014"), ("12", "016"), ("", "018")],
       f"bestehende Reihenfolge, Lücken zu: {[(p[1], p[2]) for p in plan]}")
 

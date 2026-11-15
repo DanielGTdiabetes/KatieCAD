@@ -119,6 +119,7 @@ BESCHREIBUNG = {
     "umbenennen_zaehler": ("Geräte mit Zähler umbenennen (10K1, 10K2 ...)",
                            "Rename devices with counter (10K1, 10K2 ...)"),
     "klemmen_nummern": ("Klemmenleisten neu nummerieren", "Renumber terminal strips"),
+    "klemmenleiste": ("Klemmenleiste bearbeiten (Tabelle)", "Edit terminal strip (table)"),
     "drahtnummern": ("Drahtnummern vergeben", "Number wires"),
     "versatz_verschieben": ("Verschieben um Versatz (ΔX, ΔY, ΔZ)", "Move by offset (ΔX, ΔY, ΔZ)"),
     "ofang": ("Objektfang ein/aus", "Object snap on/off"),
