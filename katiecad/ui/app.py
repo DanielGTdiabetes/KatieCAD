@@ -104,7 +104,7 @@ from katiecad.ui.dialogs import (
     MasstextDialog, WandDialog, KanalDialog, OeffnungDialog, RaumDialog, BauteilkatalogDialog, SchnellauswahlDialog, SuchenErsetzenDialog, QuerverweisDialog, PruefungDialog, EigenschaftenPalette, VerbindungspunkteDialog, ProjektDruckDialog,
     VerbindungspunktDialog, VerbindungDialog, FestMaskeDialog,
     KoordinatenfeldDialog,
-    TitleBlockDialog, DokumentationDialog, ListenAuswahlDialog, MPrintDialog, SchriftenDialog, ProjektEigenschaftenDialog,
+    TitleBlockDialog, DokumentationDialog, ListenAuswahlDialog, MPrintDialog, VersatzDialog, SchriftenDialog, ProjektEigenschaftenDialog,
 )
 from katiecad.reports import seiten as SEI, anwenden as ANW
 from katiecad.fileio.pdf import pdf_erzeugen, pdf_senden, pdf_mehrseitig_erzeugen
@@ -1244,6 +1244,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         #    trim, break, fillet, chamfer, align
         m_bearb.add_command(label=tr("menu.bearbeiten.verschieben"),
                             command=lambda: self._op_start("move"))
+        m_bearb.add_command(label=tr("menu.bearbeiten.versatz_verschieben"),
+                            command=self.versatz_verschieben)
         m_bearb.add_command(label=tr("menu.bearbeiten.drehen"),
                             command=lambda: self._op_start("rotate"))
         m_bearb.add_command(label=tr("menu.bearbeiten.skalieren"),
@@ -9266,6 +9268,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self.messen_start()
         elif cmd == "nummerieren":
             self.geraete_nummerieren()
+        elif cmd == "versatz_verschieben":
+            self.versatz_verschieben()
         elif cmd == "drahtnummern":
             self.drahtnummern_vergeben()
         elif cmd == "schnellauswahl":
@@ -10743,19 +10747,69 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             g["blatt"] = nr
         geraete_referenzen(eigene, nr, andere)
 
+    def versatz_verschieben(self):
+        """Edit > Move by offset...: moves (or copies n times) the selection by an
+        exact ΔX, ΔY, ΔZ; ΔZ applies to 3D objects only. No pin magnet, so the typed
+        distance is kept exactly. One undo step."""
+        ziele = list(self.auswahl)
+        if not ziele:
+            self.status.set(tr("msg.versatz.keine_auswahl"))
+            return
+        fak = self._einh_faktor()
+        mit_z = any(core.kann_z(e) for e in ziele)
+        letzt = dict(getattr(self, "_versatz_letzt", None) or {})
+        vorgabe = {k: letzt.get(k, 0.0) / fak for k in ("dx", "dy", "dz")}
+        vorgabe["kopien"] = letzt.get("kopien", 0)
+        dlg = VersatzDialog(self.root, self.einheit.get(), vorgabe, mit_z, len(ziele))
+        if dlg.result is None:
+            return
+        r = dlg.result
+        dx, dy, dz = r["dx"] * fak, r["dy"] * fak, r["dz"] * fak
+        self._versatz_letzt = {"dx": dx, "dy": dy, "dz": dz, "kopien": r["kopien"]}
+        if not (dx or dy or dz):
+            self.status.set(tr("msg.versatz.null"))
+            return
+        self._snapshot()
+        ohne_z = 0
+        if r["kopien"]:
+            liste = self._ziel_liste()
+            neu = []
+            for k in range(1, r["kopien"] + 1):
+                for el in ziele:
+                    c = self._dict_zu_element(el.to_dict())
+                    if c is None:
+                        c = deepcopy(el)
+                    ohne_z += core.versetzen([c], dx * k, dy * k, dz * k)
+                    liste.append(c)
+                    neu.append(c)
+            self.auswahl = neu[-len(ziele):]
+            self._einrasten(neu, magnet=False)
+            msg = tr("msg.versatz.kopiert", n=len(neu))
+        else:
+            ohne_z = core.versetzen(ziele, dx, dy, dz)
+            self._einrasten(ziele, magnet=False)
+            msg = tr("msg.versatz.verschoben", n=len(ziele))
+        if ohne_z:
+            msg += " " + tr("msg.versatz.ohne_z", n=ohne_z)
+        self.redraw()
+        if self._ansicht3d is not None:
+            self._ansicht3d.zeichne()
+        self.status.set(msg)
+
     def _einst_speichern(self, schluessel, wert):
         """Stores one setting in the configuration file."""
         cfg = lade_konfiguration()
         cfg[schluessel] = wert
         speichere_konfiguration(cfg)
 
-    def _einrasten(self, neue):
+    def _einrasten(self, neue, magnet=True):
         """Pin magnet (devices beside another pin snap onto its line), then
         pins/junctions/terminals/devices placed on top interrupt the wires
-        they lie on."""
+        they lie on. magnet=False: exact positions (move by offset)."""
         if self._ist_layout() or not neue:
             return 0
-        if getattr(self, "pin_magnet_var", None) is not None and self.pin_magnet_var.get():
+        if (magnet and getattr(self, "pin_magnet_var", None) is not None
+                and self.pin_magnet_var.get()):
             dx, dy = pins_ausrichten(self._ziel_liste(), list(neue))
             if dx or dy:
                 self.status.set(tr("msg.pin_magnet", dx=dx, dy=dy))

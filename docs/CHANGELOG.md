@@ -1,6 +1,7 @@
 # Änderungen
 
 ## Unveröffentlicht
+- Neu: **Verschieben um Versatz** (*Bearbeiten › Verschieben um Versatz…*, Rechtsklick in 3D, Befehle `MOVEOFFSET` / `DESPLAZAR`): ΔX, ΔY und ΔZ auf einmal eingeben (in der Zeichnungseinheit), wahlweise mit Anzahl Kopien – jede Kopie um denselben Versatz weiter (Reihe, z. B. Taster- oder Bohrreihen). ΔZ gilt nur für 3D-Objekte; 2D-Objekte werden nur in X/Y verschoben (Hinweis). Ohne Pin-Magnet, ein Rückgängig-Schritt, der letzte Versatz wird vorgeschlagen. `VERSATZ` / `OFFSET` / `O` bleiben das Versatz-Werkzeug
 - Neu: **Weitere einpolige Symbole** (*12 Single-pole*): Trennschalter, Lasttrennschalter, Schütz-Hauptkontakt, Energiezähler (kWh), Frequenzumrichter, USV, Sammelschiene (7 Abgänge, von oben oder unten), Photovoltaik-Generator und PV-Wechselrichter; Anschlüsse im 5-mm-Raster, Polzahl am Strich. Erzeugt mit `tools/make_symbols_einpolig_extra.py`
 - Fix: **Leitungen im Einlinienschema** bekamen Drahtnummern (und damit Etiketten), obwohl die einpoligen Geräte nicht ausgewertet werden. Jetzt erhalten Drähte an einem einpoligen Gerät keine Nummer, alte automatische Nummern werden entfernt – außer mit *Einpolige Darstellung mit auswerten*
 - Änderung: **Potenzialnamen als Drahtnummer:** Ein Draht an einem Potenzialpfeil (Querverweis) trägt dessen frei wählbaren Namen (`+24VDC`, `+24VDC1`, `L1`, `0V` …), jetzt standardmäßig und auch dann, wenn ein Pfeilpaar den Draht nur auf einem anderen Blatt fortsetzt. Gespeicherte Projekteinstellungen bleiben unverändert

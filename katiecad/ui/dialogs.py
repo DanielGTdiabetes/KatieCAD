@@ -2803,6 +2803,89 @@ def mprint_ergebnis(csv, kopf, felder):
     return out
 
 
+class VersatzDialog(tk.Toplevel):
+    """Move by an exact offset: ΔX, ΔY, ΔZ (in the drawing unit) and optionally
+    copies (each one offset again). mit_z: ΔZ can be entered (3D objects selected).
+    result: {"dx", "dy", "dz", "kopien"} (kopien 0 = move) or None."""
+
+    def __init__(self, parent, einheit, vorgabe=None, mit_z=True, anzahl=0):
+        super().__init__(parent)
+        self.result = None
+        v = vorgabe or {}
+        self.title(tr("dlg.versatz.titel"))
+        self.transient(parent)
+        _modal(self)
+        self.configure(bg=FARBEN["bg_mittel"])
+        self.resizable(False, False)
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=tr("dlg.versatz.auswahl", n=anzahl), style="Title.TLabel").grid(
+            row=0, column=0, columnspan=3, sticky=tk.W)
+        self._v = {}
+        for i, k in enumerate(("dx", "dy", "dz"), start=1):
+            ttk.Label(f, text=tr("dlg.versatz." + k)).grid(row=i, column=0, sticky=tk.W,
+                                                           pady=3, padx=(0, 8))
+            var = tk.StringVar(value=zahl_text(v.get(k, 0.0)))
+            e = ttk.Entry(f, textvariable=var, width=12)
+            e.grid(row=i, column=1, sticky=tk.W, pady=3)
+            ttk.Label(f, text=einheit).grid(row=i, column=2, sticky=tk.W, padx=(6, 0))
+            if k == "dz" and not mit_z:
+                e.state(["disabled"])
+                var.set("0")
+            self._v[k] = var
+            if i == 1:
+                e.focus_set()
+                e.select_range(0, tk.END)
+        self._kopie = tk.BooleanVar(value=bool(v.get("kopien")))
+        self._n = tk.StringVar(value=str(max(1, int(v.get("kopien") or 1))))
+        kf = ttk.Frame(f)
+        kf.grid(row=4, column=0, columnspan=3, sticky=tk.W, pady=(8, 0))
+        ttk.Checkbutton(kf, text=tr("dlg.versatz.kopieren"), variable=self._kopie).pack(side=tk.LEFT)
+        ttk.Spinbox(kf, from_=1, to=999, textvariable=self._n, width=5).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Label(f, text=tr("dlg.versatz.hinweis" if mit_z else "dlg.versatz.hinweis_2d"),
+                  style="Hint.TLabel", wraplength=320, justify=tk.LEFT).grid(
+            row=5, column=0, columnspan=3, sticky=tk.W, pady=(8, 0))
+        bf = ttk.Frame(f)
+        bf.grid(row=6, column=0, columnspan=3, pady=(12, 0))
+        ttk.Button(bf, text=tr("dlg.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
+        self.bind("<Return>", lambda e: self._ok())
+        self.bind("<Escape>", lambda e: self.destroy())
+        _zentrieren(self, parent)
+        self.wait_window(self)
+
+    def _ok(self):
+        erg = versatz_ergebnis({k: v.get() for k, v in self._v.items()},
+                               self._kopie.get(), self._n.get())
+        if erg is None:
+            messagebox.showerror(tr("dlg.versatz.titel"), tr("dlg.versatz.fehler"), parent=self)
+            return
+        self.result = erg
+        self.destroy()
+
+
+def zahl_text(x):
+    """0.5 -> '0.5', 10.0 -> '10'."""
+    return ("%g" % float(x)) if x else "0"
+
+
+def versatz_ergebnis(werte, kopie, n):
+    """Parses the offset dialog: werte {"dx","dy","dz": text}, decimal comma allowed.
+    -> {"dx", "dy", "dz", "kopien"} or None if a value is not a number."""
+    out = {}
+    for k in ("dx", "dy", "dz"):
+        t = str(werte.get(k, "") or "0").strip().replace(",", ".")
+        try:
+            out[k] = float(t)
+        except ValueError:
+            return None
+    try:
+        out["kopien"] = max(1, min(999, int(str(n).strip()))) if kopie else 0
+    except ValueError:
+        return None
+    return out
+
+
 class DrahtnummernDialog(tk.Toplevel):
     """Options of the wire numbering. vorgabe: settings dict (see
     electrical.drahtnummern.STANDARD). mehrere_blaetter: offer "whole project".

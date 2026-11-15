@@ -182,7 +182,9 @@ offset en X, Y o Z.
      canaleta y número de barras de 2 m). Tapa incluida o aparte (opción).
    - Partir de la herramienta `DUCT` existente: añadir tope de longitud, catálogo y datos de
      artículo al `Koerper3D.kanal` (p. ej. `"ref"`, `"hoehe"`, `"laenge"`).
-3. **Menú «Desplazar con offset…»** (menú Editar y clic derecho en 3D, también en 2D):
+3. **HECHO (15-11-2026):** menú «Desplazar con offset…» (`CadApp.versatz_verschieben`,
+   `VersatzDialog`, `core.versetzen` / `core.kann_z`, test `tests/test_versatz.py`).
+   Diseño original: **Menú «Desplazar con offset…»** (menú Editar y clic derecho en 3D, también en 2D):
    diálogo con **ΔX, ΔY, ΔZ** a la vez (y opción «copiar» con número de copias), aplicado a la
    selección con un único paso de deshacer. Reutiliza `verschieben(dx, dy, dz)` de los cuerpos
    (en 2D, ΔZ desactivado).

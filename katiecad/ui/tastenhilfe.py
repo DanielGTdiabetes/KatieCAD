@@ -114,6 +114,7 @@ BESCHREIBUNG = {
     "move": ("Verschieben", "Move"),
     "nummerieren": ("Geräte automatisch nummerieren", "Number devices automatically"),
     "drahtnummern": ("Drahtnummern vergeben", "Number wires"),
+    "versatz_verschieben": ("Verschieben um Versatz (ΔX, ΔY, ΔZ)", "Move by offset (ΔX, ΔY, ΔZ)"),
     "ofang": ("Objektfang ein/aus", "Object snap on/off"),
     "ortho": ("Ortho ein/aus", "Ortho on/off"),
     "paste": ("Einfügen", "Paste"),

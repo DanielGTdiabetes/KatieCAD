@@ -104,6 +104,7 @@ BESCHREIBUNG = {
     "move": "Mover",
     "nummerieren": "Numerar aparatos automáticamente",
     "drahtnummern": "Numerar hilos",
+    "versatz_verschieben": "Desplazar con offset (ΔX, ΔY, ΔZ)",
     "ofang": "Referencia a objetos sí/no",
     "ortho": "Orto sí/no",
     "paste": "Pegar",

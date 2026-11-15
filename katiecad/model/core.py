@@ -663,6 +663,7 @@ BEFEHLE = {
     "ORTHO": "ortho",
     "MASSTEXT": "masstext", "BEMTEXT": "masstext", "DIMTEXT": "masstext",
     "VERSCHIEBEN": "move", "V": "move", "MOVE": "move", "M": "move",
+    "MOVEOFFSET": "versatz_verschieben", "DESPLAZAR": "versatz_verschieben",
     "KOPIEREN": "copy", "KO": "copy", "COPY": "copy", "CO": "copy", "CP": "copy",
     "COPYBASE": "copybase", "KOPIERENBASIS": "copybase",
     "KOPIERENMITBASISPUNKT": "copybase", "KOPIERENMITBASIS": "copybase",
@@ -6206,6 +6207,36 @@ def einpolig_ignorieren(flag):
     """True if an element carrying the single-pole flag `flag` must be left out of the
     evaluations (flag set and the project option 'evaluate single-pole too' off)."""
     return bool(flag) and not EINPOLIG_MIT[0]
+
+
+_HAT_DZ = {}
+
+
+def kann_z(el):
+    """True if the element moves in Z (3D bodies, blocks, sketches, 3D texts and
+    dimensions: verschieben(dx, dy, dz)); 2D elements lie on z = 0."""
+    import inspect
+    k = type(el)
+    if k not in _HAT_DZ:
+        try:
+            _HAT_DZ[k] = "dz" in inspect.signature(k.verschieben).parameters
+        except (TypeError, ValueError, AttributeError):
+            _HAT_DZ[k] = False
+    return _HAT_DZ[k]
+
+
+def versetzen(objekte, dx, dy, dz=0.0):
+    """Moves the objects by an exact offset (ΔX, ΔY, ΔZ in mm). dz only applies to
+    objects that can move in Z (see kann_z). -> number of objects that ignored dz."""
+    ohne_z = 0
+    for el in objekte:
+        if dz and kann_z(el):
+            el.verschieben(dx, dy, dz)
+        else:
+            el.verschieben(dx, dy)
+            if dz:
+                ohne_z += 1
+    return ohne_z
 
 
 def ist_einpolig(el):

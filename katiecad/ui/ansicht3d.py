@@ -2310,6 +2310,8 @@ class Ansicht3D(tk.Frame):
                 m.add_command(label=tr("d3.ctx.mass"), command=self.massdialog)
             m.add_command(label=tr("d3.ctx.verschieben_bp"),
                           command=lambda: self.punkt_verschieben(False))
+            m.add_command(label=tr("menu.bearbeiten.versatz_verschieben"),
+                          command=self.app.versatz_verschieben)
             m.add_command(label=tr("d3.ctx.kopieren"), command=self._ctx_kopieren)
             m.add_command(label=tr("d3.ctx.kopieren_bp"),
                           command=lambda: self.punkt_verschieben(True))
