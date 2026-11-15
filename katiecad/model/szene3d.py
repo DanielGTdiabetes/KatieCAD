@@ -606,7 +606,17 @@ def _el_fang(el, out):
 def fang_kandidaten(elemente):
     """Snap candidates [(3D point, kind)] with kind end / mitte / zentrum."""
     out = []
+    modelle = set()
+    for el in elemente:                               # imported device models: their own points
+        for k in (el.koerper() if ist_3d(el) and hasattr(el, "koerper") else ()):
+            fang = (getattr(k, "netzdaten", None) or {}).get("fang") if k.art == "netz" else None
+            if fang:
+                modelle.add(id(el))
+                out.extend(((q[0], q[1], q[2]), "end" if q[3] == "ecke" else "zentrum")
+                           for q in fang)
     for _el, nz in koerper_netze(elemente):
+        if id(_el) in modelle:
+            continue
         if len(nz.punkte) > 24:                       # round body: only the cap centres
             zs = [p[2] for p in nz.punkte]
             z0, z1 = min(zs), max(zs)

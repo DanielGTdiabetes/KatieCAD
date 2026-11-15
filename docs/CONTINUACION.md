@@ -128,6 +128,14 @@ Petición: importar STEP y asignar un modelo 3D a cada equipo del esquema; el vi
    - plano de colocación = **cara delantera de la placa de montaje** (plano vertical y = cte)
      en lugar del plano horizontal; con OSNAP siguen enganchando las esquinas.
    - Armarios girados un ángulo cualquiera: de momento colocar en el suelo y avisar.
+**HECHO (15-11-2026), primera parte de la importación:** `fileio/modell3d.py` (STEP con OCP 8 y
+anteriores, STL, simplificación, orientación, puntos de captura, caché `.katie3d`),
+`Koerper3D.geraet` y `netzdaten["fang"]` (se mueven con el cuerpo y son los únicos puntos de
+enganche del modelo), menú 3D > «Importar modelo de equipo», colocación sobre la cara de la placa
+(`_kopie_starten(ref, ebene_y)`, `_platten_punkt`), test `tests/test_modell3d.py` (STEP real con
+OCP generado en el test). Falta: asociación al símbolo/artículo y «Colocar equipos» (punto 4),
+puntos de captura definidos por el usuario y carril DIN (punto 7).
+
 4. **Modelo 3D asociado al símbolo** (petición del usuario, 15-11-2026): asignar el STEP una vez y
    tenerlo ya disponible al pasar a 3D. Tres niveles, del más general al más concreto:
    - **por artículo** (TYP + fabricante, en el catálogo de piezas del proyecto `p.daten["bauteile"]`):
@@ -141,7 +149,12 @@ Petición: importar STEP y asignar un modelo 3D a cada equipo del esquema; el vi
    (taladros de fijación). Guardarlos en el `.katie3d` (`"fang": [[x, y, z, "art"], ...]`) e
    incluirlos en `szene3d.fang_kandidaten` y en `_platz_pos` (el punto de enganche del equipo se
    engancha a la línea del carril).
-6. Tests: `tests/test_modell3d.py` con un STL pequeño generado en el test (cubo), simplificación
+6. Tests: `tests/test_modell3d.py`
+7. **Carril DIN** (petición del usuario): elemento como la canaleta, en barras de **2 m como
+   máximo**, perfiles TS 35×7,5 y TS 35×15 (y TS 32, TS 15). El usuario tenía abierto el
+   catálogo 3Dfindit de Weidmüller (carriles TS 35X15 2M, TS 35X7.5 2M …) como referencia de
+   artículos y modelos. Reutilizar `model/kanal_katalog.py` (tope y partición en barras) con un
+   catálogo propio y sección «sombrero»; los equipos con punto «hutschiene» enganchan a su eje. con un STL pequeño generado en el test (cubo), simplificación
    (un cubo triangulado debe quedar con 12 aristas), orientación, caché, y con OCP instalado un
    STEP generado con OCP (`BRepPrimAPI_MakeBox` + `STEPControl_Writer`) para no depender de
    archivos externos.

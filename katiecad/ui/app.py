@@ -1491,6 +1491,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                          command=lambda: self.ansicht3d_befehl("loch"))
         m_3d.add_command(label=tr("menu.3d.mechanik"),
                          command=lambda: self.ansicht3d_befehl("mechanik"))
+        m_3d.add_command(label=tr("menu.3d.modell"),
+                         command=lambda: self.ansicht3d_befehl("modell"))
         m_3d.add_command(label=tr("menu.3d.mass"),
                          command=lambda: self.ansicht3d_befehl("mass"))
         m_3d.add_command(label=tr("menu.3d.drehen"),

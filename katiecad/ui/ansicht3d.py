@@ -12,6 +12,7 @@ also pulls closed 2D shapes up or down into solids ("push/pull").
 """
 
 import math
+import os
 import re
 from copy import deepcopy
 import tkinter as tk
@@ -461,6 +462,55 @@ def mechanik_ergebnis(form, werte, bez="", vorlage=""):
     if groesse <= 0 or out["nx"] < 1 or out["ny"] < 1 or out["tiefe"] < 0:
         return None
     return out
+
+
+class ModellImportDialog(tk.Toplevel):
+    """Import of a device model: front axis of the model, mesh tolerance, equipment
+    identifier. result = {"front", "toleranz", "ind"} or None."""
+
+    def __init__(self, parent, datei, ist_step):
+        super().__init__(parent)
+        self.result = None
+        self.title(tr("d3.modell.titel"))
+        self.transient(parent)
+        self.configure(bg=FARBEN["bg_mittel"])
+        self.resizable(False, False)
+        f = ttk.Frame(self, padding=12)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=datei, style="Title.TLabel").grid(row=0, column=0, columnspan=2, sticky=tk.W)
+        ttk.Label(f, text=tr("d3.modell.front")).grid(row=1, column=0, sticky=tk.W, pady=(8, 2))
+        self.front = tk.StringVar(value="+Z")
+        ttk.Combobox(f, textvariable=self.front, state="readonly", width=8,
+                     values=["+Z", "-Z", "+Y", "-Y", "+X", "-X"]).grid(row=1, column=1, sticky=tk.W,
+                                                                      pady=(8, 2))
+        self.tol = tk.StringVar(value="0.5")
+        if ist_step:
+            ttk.Label(f, text=tr("d3.modell.toleranz")).grid(row=2, column=0, sticky=tk.W, pady=2)
+            ttk.Entry(f, textvariable=self.tol, width=8).grid(row=2, column=1, sticky=tk.W)
+        ttk.Label(f, text=tr("d3.modell.ind")).grid(row=3, column=0, sticky=tk.W, pady=2)
+        self.ind = tk.StringVar(value="")
+        ttk.Entry(f, textvariable=self.ind, width=14).grid(row=3, column=1, sticky=tk.W)
+        ttk.Label(f, text=tr("d3.modell.hinweis"), style="Hint.TLabel", wraplength=380,
+                  justify=tk.LEFT).grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+        bt = ttk.Frame(f)
+        bt.grid(row=5, column=0, columnspan=2, pady=(10, 0))
+        ttk.Button(bt, text="OK", command=self._ok).pack(side=tk.LEFT, padx=6)
+        ttk.Button(bt, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=6)
+        self.bind("<Return>", lambda ev: self._ok())
+        self.bind("<Escape>", lambda ev: self.destroy())
+        _zentrieren(self, parent)
+        _modal(self)
+
+    def _ok(self):
+        try:
+            t = float(self.tol.get().strip().replace(",", "."))
+            if t <= 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror(tr("d3.titel"), tr("d3.msg.zahl"), parent=self)
+            return
+        self.result = {"front": self.front.get(), "toleranz": t, "ind": self.ind.get().strip()}
+        self.destroy()
 
 
 class MassDialog(tk.Toplevel):
@@ -1738,6 +1788,18 @@ class Ansicht3D(tk.Frame):
     # ------------------------------------------------------------------
     # mouse: selection, cube, manipulator
     # ------------------------------------------------------------------
+    def _platten_punkt(self, e, y0):
+        """Point on the vertical plane y = y0 under the mouse (grid in x and z)."""
+        o, d = self.kamera.strahl(e.x, e.y, *self._mitte())
+        if abs(d[1]) < 1e-9:
+            return None
+        t = (y0 - o[1]) / d[1]
+        p = (o[0] + t * d[0], y0, o[2] + t * d[2])
+        r = self._raster_fang()
+        if r:
+            p = (round(p[0] / r) * r, p[1], round(p[2] / r) * r)
+        return p
+
     def _bodenpunkt(self, e, z=0.0):
         p = self.kamera.auf_ebene(e.x, e.y, *self._mitte(), z)
         if p is None:
@@ -2181,7 +2243,10 @@ class Ansicht3D(tk.Frame):
         """Base point of a body being placed: grid, then OSNAP: a corner/centre of the new body
         snaps onto a snap point of an existing object (to line bodies up or join them).
         -> (position or None, [(snap point, kind)])"""
-        p = self._bodenpunkt(e, pl["z"])
+        if pl.get("ebene_y") is not None:
+            p = self._platten_punkt(e, pl["ebene_y"])
+        else:
+            p = self._bodenpunkt(e, pl["z"])
         if p is None:
             return None, []
         if not self.app.osnap.get():
@@ -2501,7 +2566,11 @@ class Ansicht3D(tk.Frame):
         (with object snap) and is put down with a click."""
         self._kopie_starten([x for x in self.app.auswahl if S.ist_raum(x)])
 
-    def _kopie_starten(self, quellen):
+    def _kopie_starten(self, quellen, ref=None, ebene_y=None, info=None):
+        """The objects hang on the mouse and are put down with a click. ref: point of the
+        objects that follows the mouse (default: lowest front left corner); ebene_y: the
+        mouse moves on the vertical plane y = ebene_y (the front of a mounting plate)
+        instead of the floor."""
         if not quellen:
             self.info_var.set(tr("d3.msg.kopie_nichts"))
             return
@@ -2512,14 +2581,76 @@ class Ansicht3D(tk.Frame):
             b = x.bbox3() if hasattr(x, "bbox3") else None
             if b:
                 bs.append(b)
-        if bs:
-            ref = (min(b[0] for b in bs), min(b[1] for b in bs), min(b[2] for b in bs))
-        else:
-            ref = (0.0, 0.0, 0.0)
+        if ref is None:
+            if bs:
+                ref = (min(b[0] for b in bs), min(b[1] for b in bs), min(b[2] for b in bs))
+            else:
+                ref = (0.0, 0.0, 0.0)
         self._platz = {"art": None, "par": None, "z": ref[2], "maus": None,
-                       "kopie": vorlagen, "ref": ref}
-        self.info_var.set(tr("d3.msg.kopie_platzieren"))
+                       "kopie": vorlagen, "ref": ref, "ebene_y": ebene_y}
+        self.info_var.set(info or tr("d3.msg.kopie_platzieren"))
         self.zeichne()
+
+    def montageplatte_y(self):
+        """y of the front face of the first visible mounting plate, or None."""
+        for el in self._sichtbare():
+            for t in getattr(el, "teile", ()):
+                if getattr(t, "bez", "") == "Montageplatte":
+                    b = t.bbox3()
+                    if b:
+                        return b[1]
+        return None
+
+    def modell_importieren(self):
+        """3D > Import 3D model: STEP / STL / .katie3d -> simplified wireframe body that hangs
+        on the mouse; with a cabinet its back lies on the front of the mounting plate. The
+        conversion is cached in the folder 3D of the project."""
+        from katiecad.fileio import modell3d as MD
+        from tkinter import filedialog
+        pfad = filedialog.askopenfilename(
+            parent=self.app.root, title=tr("d3.modell.titel"),
+            filetypes=[(tr("d3.modell.typen"), "*.step *.stp *.STEP *.STP *.stl *.STL *.katie3d"),
+                       ("*.*", "*.*")])
+        if not pfad:
+            return
+        ext = os.path.splitext(pfad)[1].lower()
+        if ext in (".step", ".stp") and not MD.ocp_verfuegbar():
+            messagebox.showerror(tr("d3.modell.titel"), tr("d3.modell.ocp_fehlt"), parent=self.app.root)
+            return
+        if ext == ".katie3d":
+            einst = {"front": "+Z", "toleranz": 0.5, "ind": ""}
+        else:
+            dlg = ModellImportDialog(self.app.root, os.path.basename(pfad), ext in (".step", ".stp"))
+            self.app.root.wait_window(dlg)
+            if not dlg.result:
+                return
+            einst = dlg.result
+        p = getattr(self.app, "projekt", None)
+        cache = None
+        if p is not None and ext != ".katie3d":
+            cache = MD.cache_pfad(os.path.join(p.ordner, "3D"), pfad, einst["front"])
+        self.app.root.config(cursor="watch")
+        self.app.root.update_idletasks()
+        try:
+            if cache and os.path.exists(cache) and os.path.getmtime(cache) >= os.path.getmtime(pfad):
+                modell = MD.laden(cache)
+            else:
+                modell = MD.importieren(pfad, einst["front"], einst["toleranz"])
+                if cache:
+                    os.makedirs(os.path.dirname(cache), exist_ok=True)
+                    MD.speichern(cache, modell)
+        except (MD.ModellFehler, OSError, ValueError) as ex:
+            messagebox.showerror(tr("d3.modell.titel"), str(ex), parent=self.app.root)
+            return
+        finally:
+            self.app.root.config(cursor="")
+        netz = dict(modell["netz"], fang=modell.get("fang", []))
+        body = Koerper3D("netz", netzdaten=netz, bez=einst["ind"] or modell.get("quelle", ""),
+                         geraet=einst["ind"], **self._stil())
+        w, d, h = modell.get("masse", (0, 0, 0))
+        y_platte = self.montageplatte_y()
+        self._kopie_starten([body], ref=(0.0, 0.0, 0.0), ebene_y=y_platte,
+                            info=tr("d3.modell.platzieren", w="%g" % w, d="%g" % d, h="%g" % h))
 
     def _kopie_bilden(self, pl, pos):
         """Moved copies of the template objects, base corner at `pos`."""
@@ -2684,6 +2815,8 @@ class Ansicht3DMixin:
             w.loch_dialog()
         elif cmd == "mechanik":
             w.modus_setzen("mechanik")
+        elif cmd == "modell":
+            w.modell_importieren()
         elif cmd == "block":
             w.block_bilden()
         elif cmd == "aufloesen":

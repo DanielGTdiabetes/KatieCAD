@@ -704,6 +704,7 @@ BEFEHLE = {
     "EXTRUDIEREN": "3d:extrudieren", "EXT": "3d:extrudieren", "EXTRUDE": "3d:extrudieren",
     "LOCH": "3d:loch", "BOHRUNG": "3d:loch", "HOLE": "3d:loch",
     "MECHANIK": "3d:mechanik", "MECANIZADO": "3d:mechanik", "MACHINING": "3d:mechanik",
+    "STEP": "3d:modell", "MODELO3D": "3d:modell", "MODELL3D": "3d:modell", "IMPORT3D": "3d:modell",
     "3DMASS": "3d:mass", "MASSE": "3d:mass",
     "3DDREHEN": "3d:drehen", "3DROTATE": "3d:drehen", "DREHEN3D": "3d:drehen",
     "3DABRUNDEN": "3d:abrunden", "3DFILLET": "3d:abrunden",
@@ -5428,8 +5429,10 @@ class Koerper3D(Element):
     def __init__(self, art="prisma", profil=None, z0=0.0, hoehe=10.0, spitze=None,
                  rund=False, kugel=None, bez="", loecher=None, ebene=None,
                  ausschnitte=None, glatt=None, r_oben=0.0, r_unten=0.0, netzdaten=None,
-                 kanal=None, **kw):
+                 kanal=None, geraet="", **kw):
         super().__init__("koerper3d", **kw)
+        # imported device model: equipment identifier of the device it stands for (-K1)
+        self.geraet = str(geraet or "")
         # cable duct piece: {"art": "gerade" | "verbinder" | "winkel" | "t", "breite": mm}
         self.kanal = dict(kanal) if isinstance(kanal, dict) else None
         # art "netz": merged body (union of several bodies) = free mesh
@@ -5438,6 +5441,10 @@ class Koerper3D(Element):
             "p": [[float(c) for c in p] for p in netzdaten.get("p", [])],
             "k": [[int(i), int(j)] for i, j in netzdaten.get("k", [])],
             "f": [[int(i) for i in f] for f in netzdaten.get("f", [])]}
+        if self.netzdaten and netzdaten.get("fang"):
+            # snap points of an imported device model: [x, y, z, kind] (see fileio/modell3d.py)
+            self.netzdaten["fang"] = [[float(q[0]), float(q[1]), float(q[2]), str(q[3])]
+                                      for q in netzdaten["fang"]]
         self._netz_cache = None
         self.r_oben, self.r_unten = float(r_oben or 0.0), float(r_unten or 0.0)
         self.glatt = [bool(g) for g in glatt] if glatt else None
@@ -5468,6 +5475,8 @@ class Koerper3D(Element):
         """Applies f(x, y, z) -> (x, y, z) to all points of a merged body."""
         if self.netzdaten:
             self.netzdaten["p"] = [list(f(*p)) for p in self.netzdaten["p"]]
+            if self.netzdaten.get("fang"):
+                self.netzdaten["fang"] = [list(f(*q[:3])) + [q[3]] for q in self.netzdaten["fang"]]
         self._netz_cache = None
 
     def netz(self):
