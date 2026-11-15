@@ -93,7 +93,7 @@ from katiecad.model.core import (
     teile_bogen_durch_winkel,
 )
 from katiecad.ui.dialogs import (
-    DrahtnummernDialog, UmbenennenDialog,
+    DrahtnummernDialog, UmbenennenDialog, KlemmenNummernDialog,
     farbe_waehlen, VON_LAYER,
     LICENSE_TEXT, zeige_lizenz_fenster,
     _LayoutNameDialog, BlattEigenschaftenDialog, PropertiesDialog, ViewportDialog,
@@ -1197,6 +1197,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
                               command=self.geraete_nummerieren)
         m_projekt.add_command(label=tr("menu.projekt.umbenennen_zaehler"),
                               command=self.geraete_umbenennen)
+        m_projekt.add_command(label=tr("menu.projekt.klemmen_nummern"),
+                              command=self.klemmen_nummerieren)
         m_projekt.add_command(label=tr("menu.projekt.drahtnummern"),
                               command=self.drahtnummern_vergeben)
         m_projekt.add_command(label=tr("menu.projekt.bauteile"),
@@ -9441,6 +9443,8 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
             self.geraete_nummerieren()
         elif cmd == "umbenennen_zaehler":
             self.geraete_umbenennen()
+        elif cmd == "klemmen_nummern":
+            self.klemmen_nummerieren()
         elif cmd == "versatz_verschieben":
             self.versatz_verschieben()
         elif cmd == "drahtnummern":
@@ -11875,6 +11879,68 @@ class CadApp(AendernMixin, Ansicht3DMixin, ToolbarDockMixin):
         self.redraw()
         self.status.set(tr("msg.umb.fertig", n=len(plan), t=sum(geaendert.values()),
                            b=len(geaendert)))
+
+    def klemmen_nummerieren(self):
+        """Project > Renumber terminal strips: the terminals of the chosen strips get the
+        numbers 1, 2 ... over the whole project, by position or closing the gaps of the
+        present order (see electrical.klemmen_nummern)."""
+        from katiecad.electrical import klemmen_nummern as KN
+        if self._ist_layout():
+            self.status.set(tr("txt.0126"))
+            return
+        p = self.projekt
+        if p is not None and not self._blatt_sichern():
+            return
+        aktiv = p.aktiv if p is not None else 0
+        daten = {}
+        blaetter = [(aktiv, self.elemente)]
+        for i, pfad, d in self._andere_blaetter_daten():
+            daten[i] = (pfad, d)
+            blaetter.append((i, d.get("elemente", [])))
+        blaetter.sort(key=lambda b: b[0])
+        anzahl = KN.leisten(blaetter)
+        if not anzahl:
+            self.status.set(tr("msg.kln.keine_leisten"))
+            return
+        leisten = [(n, anzahl[n]) for n in sorted(anzahl, key=KN.natuerlich)]
+        gewaehlt = sorted({KN._wert(w.get("IND"), "IND") for w, _x, _y in KN.klemmen(self.auswahl)}
+                          - {""}, key=KN.natuerlich) or [n for n, _z in leisten]
+        quelle = p.doku if p is not None else getattr(self, "_kln_einst", {})
+        vorgabe = dict(KN.STANDARD, **quelle.get("klemmen_nummern", {}))
+
+        def vorschau(einst, namen):
+            return [(lst, alt, neu) for lst, alt, neu, _w in KN.planen(blaetter, set(namen), einst)]
+
+        dlg = KlemmenNummernDialog(self.root, vorgabe, leisten, gewaehlt, vorschau)
+        if dlg.result is None:
+            return
+        r = dict(dlg.result)
+        namen = set(r.pop("leisten"))
+        if p is not None:
+            p.doku["klemmen_nummern"] = r
+            p.speichern()
+        else:
+            self._kln_einst = {"klemmen_nummern": r}
+        plan = KN.planen(blaetter, namen, r)
+        betroffen = KN.blaetter_geaendert(
+            [z for z in plan if any(w.get("NUM") != z[2] for w in z[3])], blaetter)
+        if not betroffen:
+            self.status.set(tr("msg.kln.nichts"))
+            return
+        self._snapshot()
+        n = KN.anwenden(plan)
+        fehler = []
+        for i in betroffen:
+            if i == aktiv or i not in daten:
+                continue
+            try:
+                self._json_atomar_schreiben(daten[i][0], daten[i][1])
+            except OSError as ex:
+                fehler.append(str(ex))
+        if fehler:
+            messagebox.showerror(tr("dlg.kln.titel"), "\n".join(fehler), parent=self.root)
+        self.redraw()
+        self.status.set(tr("msg.kln.fertig", n=n, l=len(namen), b=len(betroffen)))
 
     def drahtnummern_vergeben(self):
         """Wire numbering (see electrical.drahtnummern): one number per wire,

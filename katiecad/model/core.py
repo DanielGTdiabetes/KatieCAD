@@ -691,6 +691,8 @@ BEFEHLE = {
     "NUMMERIEREN": "nummerieren", "AUTONUM": "nummerieren", "GERAETENUMMERN": "nummerieren",
     "UMBENENNEN": "umbenennen_zaehler", "RENOMBRAR": "umbenennen_zaehler",
     "RENAMEDEVICES": "umbenennen_zaehler",
+    "KLEMMENNUMMERN": "klemmen_nummern", "NUMBORNES": "klemmen_nummern",
+    "RENUMBERTERMINALS": "klemmen_nummern",
     "DRAHTNUMMERN": "drahtnummern", "WIRENUM": "drahtnummern", "NUMHILOS": "drahtnummern",
     "QSELECT": "schnellauswahl", "SCHNELLAUSWAHL": "schnellauswahl", "QS": "schnellauswahl",
     "VERSATZ": "versatz", "OFFSET": "versatz", "O": "versatz",

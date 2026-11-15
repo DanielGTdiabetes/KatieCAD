@@ -3147,6 +3147,116 @@ class UmbenennenDialog(tk.Toplevel):
         self.destroy()
 
 
+class KlemmenNummernDialog(tk.Toplevel):
+    """Renumber terminal strips (see electrical.klemmen_nummern). leisten: [(strip, number
+    of terminals)]; gewaehlt: strips preselected; vorschau(einst, strips) -> [(strip, old,
+    new)]. result: dict(settings, leisten=[...]) or None."""
+
+    def __init__(self, parent, vorgabe, leisten, gewaehlt, vorschau):
+        super().__init__(parent)
+        self.result = None
+        self._vorschau = vorschau
+        self._namen = [n for n, _z in leisten]
+        self.title(tr("dlg.kln.titel"))
+        self.transient(parent)
+        _modal(self)
+        self.configure(bg=FARBEN["bg_mittel"])
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(f, text=tr("dlg.kln.titel"), style="Title.TLabel").grid(
+            row=0, column=0, columnspan=4, sticky=tk.W)
+        ttk.Label(f, text=tr("dlg.kln.leisten")).grid(row=1, column=0, columnspan=4, sticky=tk.W,
+                                                      pady=(8, 2))
+        self.liste = tk.Listbox(f, selectmode=tk.EXTENDED, height=min(8, max(3, len(leisten))),
+                                exportselection=False)
+        for i, (n, z) in enumerate(leisten):
+            self.liste.insert(tk.END, tr("dlg.kln.leiste_zeile", leiste=n, n=z))
+            if n in gewaehlt:
+                self.liste.selection_set(i)
+        self.liste.grid(row=2, column=0, columnspan=4, sticky="ew")
+        self.liste.bind("<<ListboxSelect>>", lambda e: self._aktualisieren())
+        ttk.Label(f, text=tr("dlg.kln.format")).grid(row=3, column=0, sticky=tk.W, pady=(8, 0))
+        self._fmt = tk.StringVar(value=str(vorgabe.get("format") or "{n}"))
+        ttk.Entry(f, textvariable=self._fmt, width=10).grid(row=3, column=1, sticky=tk.W,
+                                                           padx=(6, 0), pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.kln.format_hilfe"), style="Hint.TLabel", wraplength=420,
+                  justify=tk.LEFT).grid(row=4, column=0, columnspan=4, sticky=tk.W)
+        ttk.Label(f, text=tr("dlg.umb.start")).grid(row=5, column=0, sticky=tk.W, pady=(8, 0))
+        self._start = tk.StringVar(value=str(vorgabe.get("start", 1)))
+        ttk.Spinbox(f, from_=0, to=9999, textvariable=self._start, width=6).grid(
+            row=5, column=1, sticky=tk.W, padx=(6, 0), pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.umb.schritt")).grid(row=5, column=2, sticky=tk.W, padx=(12, 0),
+                                                      pady=(8, 0))
+        self._schritt = tk.StringVar(value=str(vorgabe.get("schritt", 1)))
+        ttk.Spinbox(f, from_=1, to=100, textvariable=self._schritt, width=5).grid(
+            row=5, column=3, sticky=tk.W, padx=(6, 0), pady=(8, 0))
+        ttk.Label(f, text=tr("dlg.kln.reihenfolge")).grid(row=6, column=0, columnspan=4,
+                                                          sticky=tk.W, pady=(8, 0))
+        self._reihe = tk.StringVar(value=vorgabe.get("reihenfolge", "spalten"))
+        for i, w in enumerate(("spalten", "zeilen", "bestehend")):
+            ttk.Radiobutton(f, text=tr("dlg.kln." + w), variable=self._reihe, value=w).grid(
+                row=7 + i, column=0, columnspan=4, sticky=tk.W)
+        self._buchst = tk.BooleanVar(value=bool(vorgabe.get("buchstaben_behalten", True)))
+        ttk.Checkbutton(f, text=tr("dlg.kln.buchstaben"), variable=self._buchst).grid(
+            row=10, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
+        self.tree = ttk.Treeview(f, columns=("leiste", "alt", "neu"), show="headings", height=8)
+        for c, b in (("leiste", 90), ("alt", 110), ("neu", 110)):
+            self.tree.heading(c, text=tr("dlg.kln.col." + c))
+            self.tree.column(c, width=b, anchor=tk.W)
+        self.tree.grid(row=11, column=0, columnspan=4, sticky="nsew", pady=(10, 0))
+        self._info = tk.StringVar(value="")
+        ttk.Label(f, textvariable=self._info, style="Hint.TLabel", wraplength=420,
+                  justify=tk.LEFT).grid(row=12, column=0, columnspan=4, sticky=tk.W, pady=(4, 0))
+        ttk.Label(f, text=tr("dlg.kln.hinweis"), style="Hint.TLabel", wraplength=420,
+                  justify=tk.LEFT).grid(row=13, column=0, columnspan=4, sticky=tk.W, pady=(6, 0))
+        bf = ttk.Frame(f)
+        bf.grid(row=14, column=0, columnspan=4, pady=(12, 0))
+        ttk.Button(bf, text=tr("dlg.kln.ok"), command=self._ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text=tr("dlg.abbrechen"), command=self.destroy).pack(side=tk.LEFT, padx=4)
+        for v in (self._fmt, self._start, self._schritt, self._reihe, self._buchst):
+            v.trace_add("write", lambda *a: self._aktualisieren())
+        self._aktualisieren()
+        self.bind("<Return>", lambda e: self._ok())
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.wait_window(self)
+
+    def _gewaehlt(self):
+        return [self._namen[i] for i in self.liste.curselection()]
+
+    def _einst(self):
+        try:
+            start = max(0, int(self._start.get()))
+            schritt = max(1, int(self._schritt.get()))
+        except ValueError:
+            return None
+        return {"format": self._fmt.get().strip(), "start": start, "schritt": schritt,
+                "reihenfolge": self._reihe.get(), "buchstaben_behalten": self._buchst.get()}
+
+    def _aktualisieren(self):
+        from katiecad.electrical.klemmen_nummern import format_gueltig
+        self.tree.delete(*self.tree.get_children())
+        e = self._einst()
+        if e is None or not format_gueltig(e["format"]):
+            self._info.set(tr("dlg.kln.format_fehler"))
+            return
+        zeilen = self._vorschau(e, self._gewaehlt())
+        for z in zeilen[:1000]:
+            self.tree.insert("", tk.END, values=z)
+        self._info.set(tr("dlg.kln.anzahl", n=len(zeilen), g=sum(1 for z in zeilen if z[1] != z[2])))
+
+    def _ok(self):
+        from katiecad.electrical.klemmen_nummern import format_gueltig
+        e = self._einst()
+        if e is None or not format_gueltig(e["format"]):
+            messagebox.showerror(tr("dlg.kln.titel"), tr("dlg.kln.format_fehler"), parent=self)
+            return
+        if not self._gewaehlt():
+            messagebox.showerror(tr("dlg.kln.titel"), tr("dlg.kln.keine"), parent=self)
+            return
+        self.result = dict(e, leisten=self._gewaehlt())
+        self.destroy()
+
+
 class SchriftenDialog(tk.Toplevel):
     """Font manager: choose installed fonts that show up in the font lists.
     result: list of the chosen font names or None."""

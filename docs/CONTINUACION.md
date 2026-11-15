@@ -329,7 +329,10 @@ python -m venv .venv-pruebas
 Peticiones del usuario (15-11-2026), funciones de EPLAN:
 
 1. **HECHO:** renombrar aparatos con contador (`electrical/umbenennen.py`, Proyecto > Renombrar aparatos con contador, `UmbenennenDialog`, test `tests/test_umbenennen.py`): formato `{sheet}{kz}{n}`, contador por letra y por hoja, orden por columnas o filas, vista previa; los contactos auxiliares (espejo), las copias unifilares y los modelos 3D (`Koerper3D.geraet`) siguen al aparato en todas las hojas. Deshacer solo cubre la hoja abierta (como «Numerar aparatos»).
-2. **Pendiente:** renumerar una regleta ya dibujada (-X1 de 1 a n, de arriba abajo o de izquierda a derecha, con reservas).
+2. **HECHO:** renumerar regletas (`electrical/klemmen_nummern.py`, Proyecto > Renumerar regletas,
+   `KlemmenNummernDialog`, test `tests/test_klemmen_nummern.py`): por columnas, por filas o cerrando
+   huecos del orden actual; PE/N/L1 se conservan; mismo número en la misma regleta = un borne. Las
+   regletas se agrupan solo por IND (no por lugar de montaje). Falta: reservas (huecos a propósito).
 3. **Pendiente, a aclarar con el usuario:** «editar borneros»: (a) colocar en el esquema varios bornes en vertical numerados de arriba abajo con el puente entre ellos, o (b) editor de regletas en tabla como EPLAN (orden, puentes, tapas, separadores) que actualiza el esquema.
 
 
